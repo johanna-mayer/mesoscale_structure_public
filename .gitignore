@@ -1,5 +1,8 @@
 # figure folders
-figures/
+figures_bt/
+figures_judge/
+figures_judge_goes_NEP/
+figures_judge_goes_SEP/
 src/labeled_goes_data.nc
 
 src/__pycache__/
