@@ -9,7 +9,7 @@ import timm
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import seaborn as sns
-from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
+from Code.mesoscale_structure.judge_for_goes.functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
 
 
 def setup_region_parameters(region='SEP'):
@@ -228,8 +228,8 @@ def judge_MSI(BT11, BT14, BT15, COD, model_path, device_num='1', debugging=False
 
 
 def process_goes_data(region='SEP', data_dir='/home/jmayer/Object_Data/GOES19/',
-                     model_path='/home/jmayer/ACI_research/Code/causal_aci/src_judge/64epochs_accuracy0.91456.pth',
-                     save_path='/home/jmayer/ACI_research/Code/causal_aci/resources/',
+                     model_path='/home/jmayer/ACI_research/Code/mesoscale_structure/judge_original/64epochs_accuracy0.91456.pth',
+                     save_path='/home/jmayer/ACI_research/Code/resources/',
                      plot_path=None, days=None, device_num='1'):
     """Main processing function"""
     
@@ -335,8 +335,8 @@ def main():
     parser = argparse.ArgumentParser(description='Process GOES-19 data with JUDGE algorithm')
     parser.add_argument('--region', choices=['SEP', 'NEP'], default='SEP', help='Region to process')
     parser.add_argument('--data_dir', default='/home/jmayer/Object_Data/GOES19/', help='Directory containing GOES data')
-    parser.add_argument('--model_path', default='/home/jmayer/ACI_research/Code/causal_aci/src_judge/64epochs_accuracy0.91456.pth', help='Path to JUDGE model')
-    parser.add_argument('--save_path', default='/home/jmayer/ACI_research/Code/causal_aci/resources/', help='Directory to save results')
+    parser.add_argument('--model_path', default='/home/jmayer/ACI_research/Code/mesoscale_structure/judge_original/64epochs_accuracy0.91456.pth', help='Path to JUDGE model')
+    parser.add_argument('--save_path', default='/home/jmayer/ACI_research/Code/resources/', help='Directory to save results')
     parser.add_argument('--device_num', default='1', help='GPU device number')
     parser.add_argument('--days', nargs='+', help='Specific days to process (e.g., 01 02 03)')
     
