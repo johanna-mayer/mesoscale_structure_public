@@ -3,7 +3,10 @@ figures_bt/
 figures_judge/
 figures_judge_goes_NEP/
 figures_judge_goes_SEP/
-src/labeled_goes_data.nc
+
+judge_for_goes/labeled_goes_data.nc
+judge_for_goes/finetuned_goes_model.pth
+judge_original/
 
 src/__pycache__/
 
