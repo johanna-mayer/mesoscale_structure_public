@@ -11,6 +11,8 @@ judge_original/
 src/__pycache__/
 judge_for_goes/__pycache__/
 judge_for_msi/__pycache__/
+analysis/__pycache__/
+backtrajectories/__pycache__/
 
 # C extensions
 *.so
