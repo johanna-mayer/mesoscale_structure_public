@@ -9,6 +9,8 @@ judge_for_goes/finetuned_goes_model.pth
 judge_original/
 
 src/__pycache__/
+judge_for_goes/__pycache__/
+judge_for_msi/__pycache__/
 
 # C extensions
 *.so
