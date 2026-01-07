@@ -16,7 +16,7 @@ def download_goes19_simple(start_date, end_date, level='L2', product='COD2KMF',
     fs = gcsfs.GCSFileSystem()
     bucket = "gcp-public-data-goes-19"
     
-    date_range = pd.date_range(start_date, end_date, freq='h')
+    date_range = pd.date_range(start_date, end_date, freq='2h')
     
     for dt in date_range:
         year = dt.year
@@ -57,7 +57,7 @@ def download_goes19_ir_channels(start_date, end_date, channels=['07', '14', '15'
     fs = gcsfs.GCSFileSystem()
     bucket = "gcp-public-data-goes-19"
     
-    date_range = pd.date_range(start_date, end_date, freq='H')
+    date_range = pd.date_range(start_date, end_date, freq='2H')
     
     for dt in date_range:
         year = dt.year
@@ -112,16 +112,16 @@ if __name__ == "__main__":
     #    level='L2',
     #)
     download_goes19_simple(
-        start_date='2025-08-02 00:00',
-        end_date='2025-08-31 00:00', 
+        start_date='2025-01-01 00:00',
+        end_date='2025-05-30 22:00', 
         product='COD2KMF',
         level='L2',
     )
     # Download IR window channels 
-    #download_goes19_ir_channels(
-    #    start_date='2025-08-10 00:00',
-    #    end_date='2025-08-31 00:00', 
-    #    channels=['11', '14', '15'],  # IR window channels
-    #    rad_type='RadF'  # Full Disk coverage
-    #)
+    download_goes19_ir_channels(
+        start_date='2025-01-01 00:00',
+        end_date='2025-05-30 22:00', 
+        channels=['11', '14', '15'],  # IR window channels
+        rad_type='RadF'  # Full Disk coverage
+    )
 

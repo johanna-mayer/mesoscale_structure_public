@@ -9,7 +9,9 @@ import timm
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import seaborn as sns
-from Code.mesoscale_structure.judge_for_goes.functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
+import sys
+sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_goes/')
+from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
 
 
 def setup_region_parameters(region='SEP'):
@@ -30,7 +32,7 @@ def setup_region_parameters(region='SEP'):
     return lat_bounds, lon_bounds, times
 
 
-def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, debugging=False):
+def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, debugging=False):
     """Preprocess GOES data for JUDGE algorithm"""
     # Simple interpolation without complex coordinate handling
     scale_factor = 2  # 2x upscaling for COD2KMF; 4x upsampling is needed if CODF is used
@@ -51,26 +53,30 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, debugging=False):
     BT_14 = xr.DataArray(BT_14, dims=['y', 'x'])
     BT_15 = xr.DataArray(BT_15, dims=['y', 'x'])
 
-    # make a grid of indices, s.t. they are always 128 pixels apart
-    y_indices = np.arange(64, BT_11.shape[0] - 64, 64)
-    x_indices = np.arange(64, BT_11.shape[1] - 64, 64)
+    if xy_indices is None:
+        # make a grid of indices, s.t. they are always 128 pixels apart
+        y_indices = np.arange(64, BT_11.shape[0] - 64, 64)
+        x_indices = np.arange(64, BT_11.shape[1] - 64, 64)
+        # Create all coordinate combinations
+        y_grid, x_grid = np.meshgrid(y_indices, x_indices, indexing='ij')
+        xy_indices = list(zip(x_grid.flatten(), y_grid.flatten()))
 
-    num_scenes = y_indices.shape[0] * x_indices.shape[0]
+    num_scenes = len(xy_indices)
     all_weirgb = []
     all_scenes_params = {'y_idx': [], 'x_idx': [], 'lon_mid': [], 'lat_mid': [], 'ice_flag': []}
     
-    for j in y_indices:
-        for i in x_indices:
-            lat_mid = latitudes[j, i]
-            lon_mid = longitudes[j, i]
+    for i,j in xy_indices:
+        lat_mid = latitudes[j, i]
+        lon_mid = longitudes[j, i]
 
+        try:
             # get window data
             data11 = BT_11[j - window_size // 2 : j + window_size // 2,
-                           i - window_size // 2 : i + window_size // 2].values
+                            i - window_size // 2 : i + window_size // 2].values
             data22 = BT_14[j - window_size // 2 : j + window_size // 2,
-                           i - window_size // 2 : i + window_size // 2].values
+                            i - window_size // 2 : i + window_size // 2].values
             data33 = BT_15[j - window_size // 2 : j + window_size // 2,
-                           i - window_size // 2 : i + window_size // 2].values
+                            i - window_size // 2 : i + window_size // 2].values
 
             gama_R = 1
             gama_G = 2
@@ -100,7 +106,7 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, debugging=False):
 
             # Normalize COT y = (x - xmin) / (xmax - xmin)
             cot1 = COD_interpolated[j - window_size // 2 : j + window_size // 2,
-                                   i - window_size // 2 : i + window_size // 2].values
+                                    i - window_size // 2 : i + window_size // 2].values
             L_bond = np.min(cot1)
             H_bond = np.max(cot1)
             # Check for division by zero
@@ -130,13 +136,19 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, debugging=False):
 
             ice_pixel = (data22 < 273)
             ice_flag = np.sum(ice_pixel) / (window_size * window_size)
-            all_scenes_params['y_idx'].append(j)
-            all_scenes_params['x_idx'].append(i)
-            all_scenes_params['lon_mid'].append(lon_mid)
-            all_scenes_params['lat_mid'].append(lat_mid)
-            all_scenes_params['ice_flag'].append(ice_flag)
 
-            all_weirgb.append(weirgb)
+        except Exception as e:
+            print(f"Error processing window at x:{i}, y:{j} - {e}")
+            ice_flag = np.nan
+            weirgb = np.nan * np.empty((4, 128, 128))
+
+        all_scenes_params['y_idx'].append(j)
+        all_scenes_params['x_idx'].append(i)
+        all_scenes_params['lon_mid'].append(lon_mid)
+        all_scenes_params['lat_mid'].append(lat_mid)
+        all_scenes_params['ice_flag'].append(ice_flag)
+
+        all_weirgb.append(weirgb)
 
     all_weirgb = np.array(all_weirgb)
 

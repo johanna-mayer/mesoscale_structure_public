@@ -2,11 +2,11 @@
   "model_type": "ResNet50d fine-tuned for GOES-19",
   "original_model": "/home/jmayer/ACI_research/Code/mesoscale_structure/judge_original/64epochs_accuracy0.91456.pth",
   "training_data": "labeled_goes_data.nc",
-  "num_training_samples": 118,
-  "fine_tuned_date": "2025-12-17 13:43:57",
+  "num_training_samples": 229,
+  "fine_tuned_date": "2025-12-23 16:40:02",
   "hyperparameters": {
     "learning_rate": 0.0001,
-    "batch_size": 4,
+    "batch_size": 8,
     "epochs": 15
   }
 }
