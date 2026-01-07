@@ -13,7 +13,6 @@ import sys
 sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_goes/')
 from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
 
-
 def setup_region_parameters(region='SEP'):
     """Setup region-specific parameters"""
     if region == 'SEP':
