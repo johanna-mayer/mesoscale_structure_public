@@ -57,7 +57,7 @@ def main():
             bt_forward = compute_bt(lati=lati, 
                         loni=loni, 
                         datei=datei, 
-                        start_hour=18, # TODO: not exect time of overpass - might this introduce errors in trajectory calculation?
+                        start_hour=18, # TODO: not exact time of overpass - might this introduce errors in trajectory calculation?
                         ndays=2,
                         backwards=False,
                         overwrite_files=True,)
