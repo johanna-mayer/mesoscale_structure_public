@@ -1,12 +1,14 @@
 {
-  "model_type": "ResNet50d fine-tuned for GOES-19",
-  "original_model": "/home/jmayer/ACI_research/Code/mesoscale_structure/judge_original/64epochs_accuracy0.91456.pth",
-  "training_data": "labeled_goes_data.nc",
-  "num_training_samples": 229,
-  "fine_tuned_date": "2025-12-23 16:40:02",
+  "model_type": "ResNet50d fine-tuned for GOES",
+  "input_channels": 4,
+  "num_classes": 6,
+  "best_epoch": 19,
+  "best_validation_accuracy": 81.25,
+  "total_epochs": 30,
+  "fine_tuned_date": "2026-01-16 12:55:41",
   "hyperparameters": {
-    "learning_rate": 0.0001,
-    "batch_size": 8,
-    "epochs": 15
+    "learning_rate": 0.0005,
+    "batch_size": 16,
+    "validation_split": 0.2
   }
 }

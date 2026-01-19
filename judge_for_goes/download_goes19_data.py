@@ -6,7 +6,7 @@ import os
 import pyproj
 from pyproj import Transformer
 
-def download_goes19_simple(start_date, end_date, level='L2', product='COD2KMF', 
+def download_goes19_simple(start_date, end_date, level='L2', satellite_id='19', product='COD2KMF', 
                           save_dir='/home/jmayer/Object_Data/GOES19/'):
     """
     Simple approach: Download full files first, then process
@@ -14,7 +14,7 @@ def download_goes19_simple(start_date, end_date, level='L2', product='COD2KMF',
     os.makedirs(save_dir, exist_ok=True)
     
     fs = gcsfs.GCSFileSystem()
-    bucket = "gcp-public-data-goes-19"
+    bucket = f"gcp-public-data-goes-{satellite_id}"
     
     date_range = pd.date_range(start_date, end_date, freq='2h')
     
@@ -32,7 +32,7 @@ def download_goes19_simple(start_date, end_date, level='L2', product='COD2KMF',
                 # Download first file of the hour
                 remote_file = files[0]
                 local_file = os.path.join(save_dir, 
-                                        f"goes19_{product}_{dt.strftime('%Y%m%d_%H%M')}.nc")
+                                        f"goes{satellite_id}_{product}_{dt.strftime('%Y%m%d_%H%M')}.nc")
                 
                 print(f"Downloading: {remote_file}")
                 fs.get(remote_file, local_file)
@@ -43,7 +43,7 @@ def download_goes19_simple(start_date, end_date, level='L2', product='COD2KMF',
 
 
 
-def download_goes19_ir_channels(start_date, end_date, channels=['07', '14', '15'],
+def download_goes19_ir_channels(start_date, end_date, satellite_id='19', channels=['07', '14', '15'],
                                 rad_type='RadF', save_dir='/home/jmayer/Object_Data/GOES19/'):
     """
     Download specific GOES-19 IR channels (corrected for actual filename format)
@@ -55,7 +55,7 @@ def download_goes19_ir_channels(start_date, end_date, channels=['07', '14', '15'
     os.makedirs(save_dir, exist_ok=True)
     
     fs = gcsfs.GCSFileSystem()
-    bucket = "gcp-public-data-goes-19"
+    bucket = f"gcp-public-data-goes-{satellite_id}"
     
     date_range = pd.date_range(start_date, end_date, freq='2H')
     
@@ -91,7 +91,7 @@ def download_goes19_ir_channels(start_date, end_date, channels=['07', '14', '15'
                     # Download first file for this channel
                     remote_file = channel_files[0]
                     local_file = os.path.join(save_dir, 
-                                            f"goes19_C{channel}_{rad_type}_{dt.strftime('%Y%m%d_%H%M')}.nc")
+                                            f"goes{satellite_id}_C{channel}_{rad_type}_{dt.strftime('%Y%m%d_%H%M')}.nc")
                     
                     print(f"  Channel {channel}: {remote_file.split('/')[-1]}")
                     fs.get(remote_file, local_file)
@@ -104,24 +104,29 @@ def download_goes19_ir_channels(start_date, end_date, channels=['07', '14', '15'
 
 
 if __name__ == "__main__":
-    # Download COD files
-    #download_goes19_simple(
-    #    start_date='2025-08-10 00:00',
-    #    end_date='2025-08-31 00:00', 
-    #    product='CODF',
-    #    level='L2',
-    #)
-    download_goes19_simple(
-        start_date='2025-01-01 00:00',
-        end_date='2025-05-30 22:00', 
-        product='COD2KMF',
-        level='L2',
-    )
-    # Download IR window channels 
-    download_goes19_ir_channels(
-        start_date='2025-01-01 00:00',
-        end_date='2025-05-30 22:00', 
-        channels=['11', '14', '15'],  # IR window channels
-        rad_type='RadF'  # Full Disk coverage
-    )
+    satellite_id = '16'  # GOES-16 or GOES-19
+    year = '2024'
+
+    for month in ['08','09','10','11','12']:
+        days_of_month = 31 if month in ['01','03','05','07','08','10','12'] else 30
+        if month == '02':
+            days_of_month = 28  # Not considering leap years for simplicity
+
+        download_goes19_simple(
+            start_date=f'{year}-{month}-01 00:00',
+            end_date=f'{year}-{month}-{days_of_month} 23:59', 
+            satellite_id=satellite_id,
+            product='COD2KMF',
+            level='L2',
+            save_dir=f'/home/jmayer/Object_Data/GOES{satellite_id}/{year}/{month}/'
+        )
+        # Download IR window channels 
+        download_goes19_ir_channels(
+            start_date=f'{year}-{month}-01 00:00',
+            end_date=f'{year}-{month}-{days_of_month} 23:59', 
+            satellite_id=satellite_id,
+            channels=['11', '14', '15'],  # IR window channels
+            rad_type='RadF',  # Full Disk coverage
+            save_dir=f'/home/jmayer/Object_Data/GOES{satellite_id}/{year}/{month}/'
+        )
 
