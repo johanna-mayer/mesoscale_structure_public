@@ -6,6 +6,8 @@ figures_judge_goes_SEP/
 
 judge_for_goes/labeled_goes_data.nc
 judge_for_goes/finetuned_goes_model.pth
+judge_for_goes/hyperparameter_search_best_params.json
+judge_for_goes/hyperparameter_search_complete_results.json
 judge_original/
 
 src/__pycache__/
