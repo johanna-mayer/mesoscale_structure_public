@@ -59,6 +59,15 @@ def get_window_data(MCOP, MRGR, along_track_idx, across_track_nadir_idx=284, win
     cwp_skew = scipy.stats.skew(CWP_window_clean.values.flatten(), bias=False, nan_policy='omit')
     cwp_inhomogeneity = np.nanstd(CWP_window_clean.values.flatten()) / np.nanmean(CWP_window_clean.values.flatten())
     cloud_cover = float(xr.where(CWP_window_clean > 0, 1, 0).mean().values)
+    if 'land_flag' in MRGR.variables:
+        land_flag_window = MRGR.land_flag.isel(along_track=along_track_isel_slice).sel(across_track=across_track_sel_slice)
+        land_fraction = float(xr.where(land_flag_window > 0, 1, 0).mean().values)
+        if land_fraction > 0.05:
+            ocean_flag = 0
+        else:
+            ocean_flag = 1
+    else:
+        ocean_flag = -1  # land_flag not available
 
     scene_params = {'along_track_mid': float(values_at_scene_midpoint['along_track_values']),
                     'time_mid': values_at_scene_midpoint['time'].values,
@@ -68,24 +77,37 @@ def get_window_data(MCOP, MRGR, along_track_idx, across_track_nadir_idx=284, win
                     'lat_max': lat_max,
                     'cwp_skew': cwp_skew,
                     'cwp_inhomogeneity': cwp_inhomogeneity,
-                    'cloud_cover': cloud_cover}
+                    'cloud_cover': cloud_cover,
+                    'ocean_flag': ocean_flag}
     return COT_window, TIR1_window, TIR2_window, TIR3_window, scene_params
 
 def clean_data(MCOP, MRGR):
     # at the borders of MSI frames are some NaN values
     # drop the across_track positions where all TIR1 values are NaN; use the same positions to drop in MCOP
-    MRGR = MRGR.dropna(dim='across_track', how='all', subset=['TIR1', 'TIR2', 'TIR3'])
-    MCOP = MCOP.sel(across_track=MRGR.across_track)
+    mrgr_valid_pixels_across = ~(
+        MRGR.TIR1.isnull().all(dim='along_track') |
+        MRGR.TIR2.isnull().all(dim='along_track') |
+        MRGR.TIR3.isnull().all(dim='along_track')
+    )
+    # Apply the mask to both datasets
+    MRGR = MRGR.where(mrgr_valid_pixels_across, drop=True)
+    MCOP = MCOP.where(mrgr_valid_pixels_across, drop=True)
 
     # because the cropping to latitude/longitude values is not along fixed along_track values, but a bit diagonal, there can be some NaN values at low or high along_track positions
-    MRGR = MRGR.dropna(dim='along_track', how='any')
-    MCOP = MCOP.sel(along_track=MRGR.along_track)
+    mrgr_valid_pixels_along = ~(
+        MRGR.TIR1.isnull().any(dim='across_track') |
+        MRGR.TIR2.isnull().any(dim='across_track') |
+        MRGR.TIR3.isnull().any(dim='across_track')
+    )
+    # Apply the mask to both datasets
+    MRGR = MRGR.where(mrgr_valid_pixels_along, drop=True)
+    MCOP = MCOP.where(mrgr_valid_pixels_along, drop=True)
 
     # check the shapes
     if not MCOP.cloud_optical_thickness.shape == MRGR.TIR1.shape:
         raise ValueError("Shapes of MCOP and MRGR do not match after dropping NaN values in MRGR.")
-    if not MRGR.TIR1.shape[1] == 351:
-        raise ValueError("MRGR.TIR1.shape[1] is not 351.")
+    if not MRGR.TIR1.shape[1] == 357:
+        raise ValueError("MRGR.TIR1.shape[1] is not 357.")
     if not MRGR.TIR1.shape[0] > 128:
         raise ValueError("MRGR.TIR1.shape[0] is not greater than 128.")
     return MCOP, MRGR
@@ -99,7 +121,7 @@ def preprocess_data(MCOP, MRGR, window_size=128, debugging=False):
     MCOP = MCOP.assign(along_track_values=MRGR['along_track'])
     MCOP = MCOP[['cloud_optical_thickness','cloud_water_path','latitude','longitude','time','along_track_values']]
     MCOP['cloud_optical_thickness'] = MCOP['cloud_optical_thickness'].fillna(0) # Fill NaN values in COT with 0 s.t. coarsening works correctly
-    MRGR = MRGR[['TIR1', 'TIR2', 'TIR3']] # MRGR data already has no NaN values
+    MRGR = MRGR[['TIR1', 'TIR2', 'TIR3','land_flag']] # MRGR data already has no NaN values
     MCOP, MRGR = clean_data(MCOP, MRGR)
     # Coarsen data to 1km resolution
     MCOP, MRGR = coarsen_to_1km(MCOP, MRGR)
@@ -110,7 +132,7 @@ def preprocess_data(MCOP, MRGR, window_size=128, debugging=False):
     num_scenes = along_track_scene_idxs.shape[0]
     all_weirgb = []
     all_scenes_params = {'along_track_mid': [], 'time_mid': [], 'lon_mid': [], 'lat_mid': [], 'lat_min': [], 'lat_max': [], 'ice_flag': [], 
-                         'cwp_skew': [], 'cwp_inhomogeneity': [], 'cloud_cover': []}
+                         'cwp_skew': [], 'cwp_inhomogeneity': [], 'cloud_cover': [], 'ocean_flag': []}
 
     for i in range(num_scenes):
 
@@ -191,6 +213,7 @@ def preprocess_data(MCOP, MRGR, window_size=128, debugging=False):
         all_scenes_params['cwp_skew'].append(scene_params['cwp_skew'])
         all_scenes_params['cwp_inhomogeneity'].append(scene_params['cwp_inhomogeneity'])
         all_scenes_params['cloud_cover'].append(scene_params['cloud_cover'])
+        all_scenes_params['ocean_flag'].append(scene_params['ocean_flag'])
 
         ice_pixel = (TIR2_window.values < 273)
         ice_flag = np.sum(ice_pixel) / (window_size * window_size)
