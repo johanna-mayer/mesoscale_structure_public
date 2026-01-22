@@ -4,6 +4,13 @@ figures_judge/
 figures_judge_goes_NEP/
 figures_judge_goes_SEP/
 
+judge_for_msi/credentials_maap.txt
+judge_for_msi/labeled_msi_data.nc
+judge_for_msi/finetuned_msi_model.pth
+judge_for_msi/finetuned_msi_model_metadata.json
+judge_for_msi/hyperparameter_search_best_params.json
+judge_for_msi/hyperparameter_search_complete_results.json
+
 judge_for_goes/labeled_goes_data.nc
 judge_for_goes/finetuned_goes_model.pth
 judge_for_goes/hyperparameter_search_best_params.json
