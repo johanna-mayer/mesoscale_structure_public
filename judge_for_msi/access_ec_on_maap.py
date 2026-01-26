@@ -197,9 +197,9 @@ def get_ec_data_url_via_maap(datetime_range,
     return ds_url_list
 
 
-def get_mcop_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:00Z'], 
-                        region='SEA', 
-                        frame='E',
+def get_mcop_via_maap(datetime_range=None, 
+                        region=None, 
+                        frame=None,
                         orbitNumber=None,
                         ec_collection = ['EarthCAREL2Validated_MAAP'],
                         mcop_variables=['time', 'latitude', 'longitude', 'cloud_water_path', 'cloud_optical_thickness'],
@@ -233,11 +233,11 @@ def get_mcop_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:
                 if trim:
                     idx_nadir = 284
                     MCOP = ecio.trim_to_frame(MCOP, latvar='latitude', sel_nadir={'across_track':idx_nadir})
-
-                print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                print(f"\tbefore cropping: lat_min, lat_max = {MCOP.latitude.min().values}, {MCOP.latitude.max().values}, lon_min, lon_max = {MCOP.longitude.min().values}, {MCOP.longitude.max().values}")
-                MCOP = crop_to_stcu_region(MCOP, region, sel_across_track_idx=284)
-                print(f" \tafter cropping: lat_min, lat_max = {MCOP.latitude.min().values}, {MCOP.latitude.max().values}, lon_min, lon_max = {MCOP.longitude.min().values}, {MCOP.longitude.max().values}")
+                if region is not None:
+                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
+                    print(f"\tbefore cropping: lat_min, lat_max = {MCOP.latitude.min().values}, {MCOP.latitude.max().values}, lon_min, lon_max = {MCOP.longitude.min().values}, {MCOP.longitude.max().values}")
+                    MCOP = crop_to_stcu_region(MCOP, region, sel_across_track_idx=284)
+                    print(f" \tafter cropping: lat_min, lat_max = {MCOP.latitude.min().values}, {MCOP.latitude.max().values}, lon_min, lon_max = {MCOP.longitude.min().values}, {MCOP.longitude.max().values}")
                 if MCOP is None:
                     continue
                 MCOP = MCOP.load() # Load data into memory
@@ -245,9 +245,9 @@ def get_mcop_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:
     return MCOP_list
 
 
-def get_mrgr_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:00Z'], 
-                        region='SEA',
-                        frame='E',
+def get_mrgr_via_maap(datetime_range=None, 
+                        region=None,
+                        frame=None,
                         orbitNumber=None,
                         ec_collection = ['EarthCAREL1Validated_MAAP'],
                         mrgr_variables=['time', 'latitude', 'longitude', 'TIR1', 'TIR2', 'TIR3'],
@@ -288,8 +288,8 @@ def get_mrgr_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:
                 if trim:
                     idx_nadir = 284
                     MRGR = ecio.trim_to_frame(MRGR, latvar='latitude', sel_nadir={'across_track':idx_nadir})
-
-                MRGR = crop_to_stcu_region(MRGR, region, sel_across_track_idx=284)
+                if region is not None:
+                    MRGR = crop_to_stcu_region(MRGR, region, sel_across_track_idx=284)
                 if MRGR is None:
                     continue
                 MRGR = MRGR.load() # Load data into memory
@@ -297,9 +297,9 @@ def get_mrgr_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:
     return MRGR_list
 
     
-def get_mnom_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:00Z'], 
-                        region='SEA',
-                        frame='E',
+def get_mnom_via_maap(datetime_range=None, 
+                        region=None,
+                        frame=None,
                         orbitNumber=None,
                         ec_collection = ['EarthCAREL1Validated_MAAP'],
                         mnom_variables=['time', 'latitude', 'longitude', 'TIR1', 'TIR2', 'TIR3','land_flag'],
@@ -346,11 +346,11 @@ def get_mnom_via_maap(datetime_range=['2025-01-01T00:00:00Z', '2025-01-01T23:59:
                 if trim:
                     idx_nadir = 284
                     MNOM = ecio.trim_to_frame(MNOM, latvar='latitude', sel_nadir={'across_track':idx_nadir})
-
-                print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                print(f"\tbefore cropping: lat_min, lat_max = {MNOM.latitude.min().values}, {MNOM.latitude.max().values}, lon_min, lon_max = {MNOM.longitude.min().values}, {MNOM.longitude.max().values}")
-                MNOM = crop_to_stcu_region(MNOM, region, sel_across_track_idx=284)
-                print(f" \tafter cropping: lat_min, lat_max = {MNOM.latitude.min().values}, {MNOM.latitude.max().values}, lon_min, lon_max = {MNOM.longitude.min().values}, {MNOM.longitude.max().values}")
+                if region is not None:
+                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
+                    print(f"\tbefore cropping: lat_min, lat_max = {MNOM.latitude.min().values}, {MNOM.latitude.max().values}, lon_min, lon_max = {MNOM.longitude.min().values}, {MNOM.longitude.max().values}")
+                    MNOM = crop_to_stcu_region(MNOM, region, sel_across_track_idx=284)
+                    print(f" \tafter cropping: lat_min, lat_max = {MNOM.latitude.min().values}, {MNOM.latitude.max().values}, lon_min, lon_max = {MNOM.longitude.min().values}, {MNOM.longitude.max().values}")
                 if MNOM is None:
                     continue
                 MNOM = MNOM.load() # Load data into memory
@@ -391,11 +391,11 @@ def get_acmcap_via_maap(datetime_range=None,
                 if acmcap_variables is not None:
                     ACMCAP = ACMCAP[acmcap_variables]
                 ACMCAP.encoding = {'source': ds_url}  # Keep track of source URL
-
-                print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                print(f"\tbefore cropping: lat_min, lat_max = {ACMCAP.latitude.min().values:.2f}, {ACMCAP.latitude.max().values:.2f}, lon_min, lon_max = {ACMCAP.longitude.min().values:.2f}, {ACMCAP.longitude.max().values:.2f}")
-                ACMCAP = crop_to_stcu_region(ACMCAP, region)
-                print(f" \tafter cropping: lat_min, lat_max = {ACMCAP.latitude.min().values:.2f}, {ACMCAP.latitude.max().values:.2f}, lon_min, lon_max = {ACMCAP.longitude.min().values:.2f}, {ACMCAP.longitude.max().values:.2f}")
+                if region is not None:
+                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
+                    print(f"\tbefore cropping: lat_min, lat_max = {ACMCAP.latitude.min().values:.2f}, {ACMCAP.latitude.max().values:.2f}, lon_min, lon_max = {ACMCAP.longitude.min().values:.2f}, {ACMCAP.longitude.max().values:.2f}")
+                    ACMCAP = crop_to_stcu_region(ACMCAP, region)
+                    print(f" \tafter cropping: lat_min, lat_max = {ACMCAP.latitude.min().values:.2f}, {ACMCAP.latitude.max().values:.2f}, lon_min, lon_max = {ACMCAP.longitude.min().values:.2f}, {ACMCAP.longitude.max().values:.2f}")
                 if ACMCAP is None:
                     continue
                 ACMCAP = ACMCAP.load() # Load data into memory

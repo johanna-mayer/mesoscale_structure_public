@@ -10,24 +10,19 @@ import seaborn as sns
 import glob
 import os
 import judge_msi
+sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_msi/')
+import access_ec_on_maap as maap
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + '/../../../ectools/')
 from ectools import ecio
 
+regions_of_interest = ['SEA'] #, 'NEA', 'SEP', 'NEP'
 # Specification of directories and files
-OUTPUT_FILE = '/home/jmayer/ACI_research/Code/resources/judge_results_Aug.csv'
-OUTPUT_PLOT = current_dir + '/../figures_judge/'
-INPUT_FILE_files_in_sc_regions = '/home/jmayer/ACI_research/Code/resources/files_in_sc_regions.json'
-FAILED_FILES_LOG = '/home/jmayer/ACI_research/Code/resources/judge_failed_files_Aug.txt'
-MCOP_data_dir = "/home/jmayer/Object_Data/MSI_COP_2A/"
-MRGR_data_dir = "/home/jmayer/Object_Data/MSI_RGR_1C/"
+OUTPUT_FILE = f'/home/jmayer/ACI_research/Code/resources_mesoscale_structure/judge_msi_results_{regions_of_interest[0]}.csv'
+OUTPUT_PLOT = current_dir + '/../figures_judge_msi/'
+INPUT_FILE_orbits_in_sc_regions = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/acmcap_orbits_in_sc_regions.json'
+FAILED_FILES_LOG = f'/home/jmayer/ACI_research/Code/resources_mesoscale_structure/judge_msi_failed_orbits_{regions_of_interest[0]}.txt'
 
-stratus_regions = {
-    'SEA': {'lat': (-22.5, -2.5), 'lon': (-5, 15)},    # South East Atlantic
-    'NEA': {'lat': (10, 30), 'lon': (-40, -20)},   # North East Atlantic
-    'SEP': {'lat': (-22.5, -2.5), 'lon': (-95, -75)},  # South East Pacific
-    'NEP': {'lat': (15, 35), 'lon': (-135, -115)}, # North East Pacific
-}
 
 def printProgressBar(iteration: int, total: int, prefix: str = '', suffix: str = '', 
                     decimals: int = 1, length: int = 50, fill: str = '█', printEnd: str = "\r") -> None:
@@ -41,8 +36,8 @@ def printProgressBar(iteration: int, total: int, prefix: str = '', suffix: str =
         print()
 
 
-def find_MCOP_and_MRGR_files_matching_ACMCAP_filename(ACMCAP_filename: str, dir_MCOP: str, dir_MRGR: str) -> Tuple[str, str]:
-    """Find MCOP and MRGR files that match the ACMCAP filename."""
+def DEPRECATED_find_MCOP_and_MNOM_files_matching_ACMCAP_filename(ACMCAP_filename: str, dir_MCOP: str, dir_MNOM: str) -> Tuple[str, str]:
+    """Find MCOP and MNOM files that match the ACMCAP filename."""
     import re 
 
     day = ACMCAP_filename.split('/')[-2]
@@ -57,20 +52,26 @@ def find_MCOP_and_MRGR_files_matching_ACMCAP_filename(ACMCAP_filename: str, dir_
 
     tmp = ACMCAP_filename.replace('ACM_CAP_2B', 'MSI_RGR_1C').replace(production_datetime, '*').replace(start_datetime, start_datetime[0:9]+'*')
     tmp = re.sub(r'ECA_EX[A-Z]{2}', 'ECA_EX*', tmp)
-    filenames_MRGR = glob.glob(f'{dir_MRGR}/{year}/{month}/{day}/{tmp}')
+    filenames_MNOM = glob.glob(f'{dir_MNOM}/{year}/{month}/{day}/{tmp}')
 
     if len(filenames_MCOP) == 0:
         raise FileNotFoundError('no_MCOP_file_found')
-    elif len(filenames_MRGR) == 0:
-        raise FileNotFoundError('no_MRGR_file_found')
+    elif len(filenames_MNOM) == 0:
+        raise FileNotFoundError('no_MNOM_file_found')
     elif len(filenames_MCOP) > 1:
         raise FileExistsError('more_than_1_MCOP_file_found')
-    elif len(filenames_MRGR) > 1:
-        raise FileExistsError('more_than_1_MRGR_file_found')
+    elif len(filenames_MNOM) > 1:
+        raise FileExistsError('more_than_1_MNOM_file_found')
     else:
-        return filenames_MCOP[0], filenames_MRGR[0]
+        return filenames_MCOP[0], filenames_MNOM[0]
 
-def trim_to_stcu_region(data, region, frame):
+def DEPRECATED_trim_to_stcu_region(data, region, frame):
+    stratus_regions = {
+        'SEA': {'lat': (-22.5, -2.5), 'lon': (-5, 15)},    # South East Atlantic
+        'NEA': {'lat': (10, 30), 'lon': (-40, -20)},   # North East Atlantic
+        'SEP': {'lat': (-22.5, -2.5), 'lon': (-95, -75)},  # South East Pacific
+        'NEP': {'lat': (15, 35), 'lon': (-135, -115)}, # North East Pacific
+    }
     lat_min, lat_max = stratus_regions[region]['lat']
     lon_min, lon_max = stratus_regions[region]['lon']
 
@@ -91,7 +92,32 @@ def trim_to_stcu_region(data, region, frame):
         )
     return data_trimmed
 
-def plot_judge_results(MCOP, MRGR, df, orbit, region, year, month, day, save_to=None):
+
+def load_msi_data_via_maap(region, frame, orbitNumber):
+    print('.' * 85)
+    print(f"Processing orbit {orbitNumber}{frame}...")
+    
+    print("Loading MCOP data...")
+    MCOP_list = maap.get_mcop_via_maap(
+                        region=region, 
+                        frame=frame,
+                        orbitNumber=orbitNumber,
+                        mcop_variables=['time', 'latitude', 'longitude', 'cloud_optical_thickness', 'cloud_water_path'], 
+                        max_items=1)
+
+    print("\n\nLoading MNOM data...")
+    MNOM_list = maap.get_mnom_via_maap(
+                        region=region, 
+                        frame=frame,
+                        orbitNumber=orbitNumber,
+                        mnom_variables=['time', 'latitude', 'longitude', 'TIR1', 'TIR2', 'TIR3','land_flag'],
+                        max_items=1)
+
+    # for simplicity we only use the first item in the list (most of the time only one overpass exists per day per region)
+    return MCOP_list[0], MNOM_list[0]
+
+
+def plot_judge_results(MCOP, MNOM, df, orbit, region, year, month, day, save_to=None):
     sns.set_context('talk', font_scale=0.8)
     fig, axs = plt.subplots(2, 1, figsize=(35,6), sharex=True)
     plt.suptitle(
@@ -104,7 +130,7 @@ def plot_judge_results(MCOP, MRGR, df, orbit, region, year, month, day, save_to=
     cbar = axs[0].collections[0].colorbar
     cbar.set_label('COT', fontsize=20)
 
-    MRGR.TIR2.T.plot(ax=axs[1], vmin=273, vmax=300)
+    MNOM.TIR2.T.plot(ax=axs[1], vmin=273, vmax=300)
     cbar = axs[1].collections[0].colorbar
     cbar.set_label('TIR2 (K)', fontsize=20)
 
@@ -115,7 +141,7 @@ def plot_judge_results(MCOP, MRGR, df, orbit, region, year, month, day, save_to=
     marker_sizes = np.array(df.cert).astype(float).ravel() * 250  # scale factor, adjust as needed
     for i in [0,1]:
         legend = True if i == 1 else False
-        scatter = sns.scatterplot(ax=axs[i], x = df.along_track_mid, y=MRGR.dims['across_track'] - 128, hue=hue, size=df.cert, size_norm=(0.3,1),
+        scatter = sns.scatterplot(ax=axs[i], x = df.along_track_mid, y=MNOM.dims['across_track'] - 128, hue=hue, size=df.cert, size_norm=(0.3,1),
                         marker='o', palette=palette, legend=legend)
         if legend and scatter.legend_ is not None:
             scatter.legend_.set_title('')
@@ -128,8 +154,8 @@ def plot_judge_results(MCOP, MRGR, df, orbit, region, year, month, day, save_to=
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
     logging.info('Starting judge processing script.')
-    with open(INPUT_FILE_files_in_sc_regions, 'r') as file:
-        files_in_stratus_regions = json.load(file)
+    with open(INPUT_FILE_orbits_in_sc_regions, 'r') as file:
+        orbits_in_stratus_regions = json.load(file)
 
     if os.path.exists(OUTPUT_FILE):
         df_results = pd.read_csv(OUTPUT_FILE)
@@ -141,54 +167,57 @@ def main():
         df_results = pd.DataFrame()
         computed_orbits = []
 
-    failed_files = []
+    failed_orbits = []
     # Clear previous failed files log
     open(FAILED_FILES_LOG, 'w').close()
-    for region, filenames in files_in_stratus_regions.items():
+    for region in regions_of_interest:
+        number_of_orbits_to_process = len(orbits_in_stratus_regions[region])
         j = 0
-        logging.info(f"Processing region: {region}, {len(filenames)} files.")
-        for i, filename in enumerate(filenames):
-            orbit = filename[-9:-3]
-            if orbit[-1] not in ['D','E']:
+        logging.info(f"Processing region: {region}, {number_of_orbits_to_process} orbits.")
+        for i, item in enumerate(orbits_in_stratus_regions[region]):
+            frame = item['frame']
+            orbitNumber = item['orbitNumber']
+            orbit = orbitNumber+frame
+            filename = item['filename']
+            date = filename.split('ACM_CAP_2B_')[1].split('_')[0][0:8]
+            year = date[0:4]
+            month = date[4:6]
+            day = date[6:8]
+            #local_file_path = f"{ACMCAP_data_dir}{year}/{month}/{day}/{filename}"
+            
+            if frame not in ['D','E']:
                 continue
             if orbit in computed_orbits:
                 logging.info(f"Skipping already computed orbit {orbit}.")
                 continue
             # TODO: Remove temporal filter
-            if ('202508' not in filename):
+            if ('2025010' not in filename):
                 continue
 
-            logging.info(f'Processing file {i+1} of {len(filenames)} in {region}: {filename}')
-            printProgressBar(i, len(filenames), prefix='Progress:', suffix='Complete', length=50)
+            logging.info(f'Processing orbit {i+1} of {number_of_orbits_to_process} in {region}: {orbit}')
+            printProgressBar(i, number_of_orbits_to_process, prefix='Progress:', suffix='Complete', length=50)
 
-            try:
-                MCOP_file, MRGR_file = find_MCOP_and_MRGR_files_matching_ACMCAP_filename(filename, MCOP_data_dir, MRGR_data_dir)
+            try: 
+                (MCOP, orbit), (MNOM, orbit) = load_msi_data_via_maap(region=region, frame=frame, orbitNumber=orbitNumber)
+                MNOM = MNOM.where(MNOM.TIR1 < 1e30)
             except (FileNotFoundError, FileExistsError) as e:
-                logging.error(f"Error finding files for {filename}: {e}")
-                failed_files.append(filename)
+                logging.error(f"Error finding files for {orbit}: {e}")
+                failed_orbits.append(orbit)
                 with open(FAILED_FILES_LOG, 'a') as f:
-                    f.write(filename + '\n')
+                    f.write(orbit + '\n')
                 continue
-
-            logging.info(f"Loading MCOP: {MCOP_file}")
-            logging.info(f"Loading MRGR: {MRGR_file}")
-            MCOP = ecio.load_MCOP(MCOP_file)
-            MRGR = ecio.load_MRGR(MRGR_file)
-            MCOP = trim_to_stcu_region(MCOP, region, orbit[-1])
-            MRGR = trim_to_stcu_region(MRGR, region, orbit[-1])
-            MRGR = MRGR.where(MRGR.TIR1 < 1e30)
 
             logging.info('Running judge...')
             try:
-                cats, cert, scene_params = judge_msi.judge_MSI(MCOP, MRGR, debugging=False)
+                cats, cert, scene_params = judge_msi.judge_MSI(MCOP, MNOM, debugging=False)
             except Exception as e:
-                logging.error(f"Error during judging for {filename}: {e}")
-                failed_files.append(filename)
+                logging.error(f"Error during judging for {orbit}: {e}")
+                failed_orbits.append(orbit)
                 with open(FAILED_FILES_LOG, 'a') as f:
-                    f.write(filename + '\n')
+                    f.write(orbit + '\n')
                 continue
             if len(cats) == 0:
-                logging.warning(f"No valid scenes found for {filename}. Skipping.")
+                logging.warning(f"No valid scenes found for {orbit}. Skipping.")
                 continue
             logging.info('Judge completed.')
 
@@ -199,8 +228,8 @@ def main():
             df_results = pd.concat([df_results, df], ignore_index=True)
 
             logging.info('Plotting results...\n')
-            plot_judge_results(MCOP, MRGR, df, orbit, region, 
-                               filename.split('/')[-4], filename.split('/')[-3], filename.split('/')[-2],
+            plot_judge_results(MCOP, MNOM, df, orbit, region, 
+                               year, month, day,
                                save_to=f'{OUTPUT_PLOT}/judge_{orbit}_{region}.png')
             # Save intermediate results
             j += 1
@@ -208,18 +237,18 @@ def main():
                 df_results.to_csv(OUTPUT_FILE, index=False)
                 logging.info(f"Intermediate results saved to {OUTPUT_FILE}\n")
 
-            del MCOP, MRGR, df
+            del MCOP, MNOM, df
             gc.collect()
 
     df_results.to_csv(OUTPUT_FILE, index=False)
     logging.info(f"Results saved to {OUTPUT_FILE}")
-    if failed_files:
+    if failed_orbits:
         logging.warning("The following files failed during processing:")
-        for f in failed_files:
+        for f in failed_orbits:
             logging.warning(f)
         # Write all failed files at the end as well
         with open(FAILED_FILES_LOG, 'a') as f:
-            for ff in failed_files:
+            for ff in failed_orbits:
                 f.write(ff + '\n')
     logging.info('Judge processing script finished.')
 

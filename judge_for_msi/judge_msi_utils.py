@@ -112,12 +112,69 @@ def clean_data(MCOP, MRGR):
         raise ValueError("MRGR.TIR1.shape[0] is not greater than 128.")
     return MCOP, MRGR
 
+def align_mcop_mnom_datasets(MCOP, MNOM, across_track_idx=284):
+    """
+    Align MCOP and MNOM datasets by finding best matching latitudes
+    along a specific across_track line
+    """
+    # Get 1D latitude arrays along the selected across_track line
+    mcop_lat_line = MCOP.latitude.isel(across_track=across_track_idx).values
+    mnom_lat_line = MNOM.latitude.isel(across_track=across_track_idx).values
+    
+    # Remove NaN values
+    mcop_valid_mask = ~np.isnan(mcop_lat_line)
+    mnom_valid_mask = ~np.isnan(mnom_lat_line)
+    
+    mcop_valid_indices = np.where(mcop_valid_mask)[0]
+    mnom_valid_indices = np.where(mnom_valid_mask)[0]
+    
+    mcop_lat_clean = mcop_lat_line[mcop_valid_mask]
+    mnom_lat_clean = mnom_lat_line[mnom_valid_mask]
+    
+    print(f"MCOP latitude range: {mcop_lat_clean.min():.3f} to {mcop_lat_clean.max():.3f}")
+    print(f"MNOM latitude range: {mnom_lat_clean.min():.3f} to {mnom_lat_clean.max():.3f}")
+    
+    # Find overlapping latitude range
+    common_lat_min = max(mcop_lat_clean.min(), mnom_lat_clean.min())
+    common_lat_max = min(mcop_lat_clean.max(), mnom_lat_clean.max())
+    
+    print(f"Common latitude range: {common_lat_min:.3f} to {common_lat_max:.3f}")
+    
+    # Find the smaller dataset size to match
+    min_size = min(len(mcop_lat_clean), len(mnom_lat_clean))
+    
+    # Method 1: Simple crop to same size (take first N elements that are in common range)
+    mcop_in_range = mcop_valid_indices[(mcop_lat_clean >= common_lat_min) & 
+                                       (mcop_lat_clean <= common_lat_max)]
+    mnom_in_range = mnom_valid_indices[(mnom_lat_clean >= common_lat_min) & 
+                                       (mnom_lat_clean <= common_lat_max)]
+    
+    # Take the minimum length to ensure same dimensions
+    final_length = min(len(mcop_in_range), len(mnom_in_range))
+    
+    mcop_final_indices = mcop_in_range[:final_length]
+    mnom_final_indices = mnom_in_range[:final_length]
+    
+    # Crop datasets
+    MCOP_aligned = MCOP.isel(along_track=mcop_final_indices)
+    MNOM_aligned = MNOM.isel(along_track=mnom_final_indices)
+    
+    print(f"Original MCOP shape: along_track={MCOP.dims['along_track']}, across_track={MCOP.dims['across_track']}")
+    print(f"Original MNOM shape: along_track={MNOM.dims['along_track']}, across_track={MNOM.dims['across_track']}")
+    print(f"Aligned MCOP shape: along_track={MCOP_aligned.dims['along_track']}, across_track={MCOP_aligned.dims['across_track']}")
+    print(f"Aligned MNOM shape: along_track={MNOM_aligned.dims['along_track']}, across_track={MNOM_aligned.dims['across_track']}")
+    
+    return MCOP_aligned, MNOM_aligned
+
+
 def coarsen_to_1km(MCOP, MRGR):
     MCOP_1km = MCOP.coarsen(along_track=2, across_track=2, boundary='trim').mean()
     MRGR_1km = MRGR.coarsen(along_track=2, across_track=2, boundary='trim').mean()
     return MCOP_1km, MRGR_1km
 
 def preprocess_data(MCOP, MRGR, window_size=128, debugging=False):
+    # make sure both datasets are aligned in terms of latitude and have the same along_track dimension
+    MCOP, MRGR = align_mcop_mnom_datasets(MCOP, MRGR, across_track_idx=284)
     MCOP = MCOP.assign(along_track_values=MRGR['along_track'])
     MCOP = MCOP[['cloud_optical_thickness','cloud_water_path','latitude','longitude','time','along_track_values']]
     MCOP['cloud_optical_thickness'] = MCOP['cloud_optical_thickness'].fillna(0) # Fill NaN values in COT with 0 s.t. coarsening works correctly
