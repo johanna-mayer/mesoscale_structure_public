@@ -2,10 +2,10 @@
   "model_type": "ResNet50d fine-tuned for GOES",
   "input_channels": 4,
   "num_classes": 6,
-  "best_epoch": 19,
+  "best_epoch": 28,
   "best_validation_accuracy": 81.25,
   "total_epochs": 30,
-  "fine_tuned_date": "2026-01-16 12:55:41",
+  "fine_tuned_date": "2026-01-26 10:36:06",
   "hyperparameters": {
     "learning_rate": 0.0005,
     "batch_size": 16,

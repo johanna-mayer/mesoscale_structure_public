@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import glob
 import os
-import judge
+import judge_msi
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir + '/../../../ectools/')
 from ectools import ecio
@@ -23,9 +23,9 @@ MCOP_data_dir = "/home/jmayer/Object_Data/MSI_COP_2A/"
 MRGR_data_dir = "/home/jmayer/Object_Data/MSI_RGR_1C/"
 
 stratus_regions = {
-    'SEA': {'lat': (-25, -2.5), 'lon': (-5, 15)},    # South East Atlantic
+    'SEA': {'lat': (-22.5, -2.5), 'lon': (-5, 15)},    # South East Atlantic
     'NEA': {'lat': (10, 30), 'lon': (-40, -20)},   # North East Atlantic
-    'SEP': {'lat': (-25, -2.5), 'lon': (-95, -75)},  # South East Pacific
+    'SEP': {'lat': (-22.5, -2.5), 'lon': (-95, -75)},  # South East Pacific
     'NEP': {'lat': (15, 35), 'lon': (-135, -115)}, # North East Pacific
 }
 
@@ -180,7 +180,7 @@ def main():
 
             logging.info('Running judge...')
             try:
-                cats, cert, scene_params = judge.judge_MSI(MCOP, MRGR, debugging=False)
+                cats, cert, scene_params = judge_msi.judge_MSI(MCOP, MRGR, debugging=False)
             except Exception as e:
                 logging.error(f"Error during judging for {filename}: {e}")
                 failed_files.append(filename)
