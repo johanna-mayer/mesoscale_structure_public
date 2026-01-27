@@ -13,8 +13,7 @@ import judge_msi
 sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_msi/')
 import access_ec_on_maap as maap
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir + '/../../../ectools/')
-from ectools import ecio
+
 
 regions_of_interest = ['SEA'] #, 'NEA', 'SEP', 'NEP'
 # Specification of directories and files
@@ -169,7 +168,7 @@ def main():
 
     failed_orbits = []
     # Clear previous failed files log
-    open(FAILED_FILES_LOG, 'w').close()
+    #open(FAILED_FILES_LOG, 'w').close()
     for region in regions_of_interest:
         number_of_orbits_to_process = len(orbits_in_stratus_regions[region])
         j = 0
