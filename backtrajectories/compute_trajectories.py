@@ -11,12 +11,16 @@ import sys
 sys.path.append('/home/jmayer/ACI_research/backtrajectory-calculator/')
 from BT import compute_bt
 
-# load judge results for EarthCARE, to get positions and times of overpasses, specifically the mid-points used for judge
-judge_results = pd.read_csv('/home/jmayer/ACI_research/Code/resources/judge_results_May-Aug.csv')
-judge_SEP = judge_results[(judge_results['lat_mid'] >= -25) & (judge_results['lat_mid'] <= -2.5) &
-                                      (judge_results['lon_mid'] >= -95) & (judge_results['lon_mid'] <= -75)]
-#judge_SEP = judge_SEP[pd.to_datetime(judge_SEP['time_mid']) >= pd.to_datetime('2025-06-01')]
-judge_SEP = judge_SEP[pd.to_datetime(judge_SEP['time_mid']) >= pd.to_datetime('2025-07-01')]
+def load_judge_msi_results():
+    # load judge results for EarthCARE, to get positions and times of overpasses, specifically the mid-points used for judge
+    judge_results = pd.read_csv('/home/jmayer/ACI_research/Code/resources_mesoscale_structure/judge_msi_results_SEP.csv')
+    judge_SEP = judge_results[(judge_results['lat_mid'] >= -25) & (judge_results['lat_mid'] <= -2.5) &
+                                        (judge_results['lon_mid'] >= -95) & (judge_results['lon_mid'] <= -75)]
+    
+    # TODO remove filter for time
+    judge_SEP = judge_SEP[pd.to_datetime(judge_SEP['time_mid']) >= pd.to_datetime('2025-08-31')]
+
+    return judge_SEP
 
 
 def bt_dict_to_xr(bt, backwards, orbit, time_i):
@@ -40,8 +44,7 @@ def bt_dict_to_xr(bt, backwards, orbit, time_i):
 
 def main():
     bt_SEP = None
-    #with xr.open_dataset('/home/jmayer/ACI_research/Code/resources/bt_SEP_partial.nc') as ds:
-    #    bt_SEP = ds.load()
+    judge_SEP = load_judge_msi_results()
         
     failed_indices = []
     for i in range(len(judge_SEP)):
@@ -84,9 +87,11 @@ def main():
         else:
             bt_SEP = xr.concat([bt_SEP, bt], dim='time_startpoint')
 
-        bt_SEP.to_netcdf(f'/home/jmayer/ACI_research/Code/resources/bt_SEP_partial.nc')
+        bt_SEP.to_netcdf(f'/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP_Sep-Nov_partial.nc')
+        #if i > 5:
+        #    break  # for testing
         
-    bt_SEP.to_netcdf('/home/jmayer/ACI_research/Code/resources/bt_SEP.nc')
+    bt_SEP.to_netcdf('/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP_Sep-Nov.nc')
     print(f'Failed indices: {failed_indices}')
 
 if __name__ == "__main__":

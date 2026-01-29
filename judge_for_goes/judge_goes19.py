@@ -62,7 +62,7 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
 
     num_scenes = len(xy_indices)
     all_weirgb = []
-    all_scenes_params = {'y_idx': [], 'x_idx': [], 'lon_mid': [], 'lat_mid': [], 'ice_flag': []}
+    all_scenes_params = {'y_idx': [], 'x_idx': [], 'lon_mid': [], 'lat_mid': [], 'ice_flag': [], 'cloud_cover': [], 'ot_gt_1': [], 'ot_gt_5': []}
     
     for i,j in xy_indices:
         lat_mid = latitudes[j, i]
@@ -135,10 +135,22 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
 
             ice_pixel = (data22 < 273)
             ice_flag = np.sum(ice_pixel) / (window_size * window_size)
+            # Compute cloud cover from original resolution COD
+            orig_i, orig_j = i // 2, j // 2  # Convert to original resolution indices
+            original_window_size = window_size // 2  # Since we're upscaling by 2x
+            cot_original = COD[orig_j - original_window_size // 2 : orig_j + original_window_size // 2,
+                              orig_i - original_window_size // 2 : orig_i + original_window_size // 2].values
+            # Compute cloud cover from original resolution
+            cloud_cover = np.sum(cot_original > 0) / (original_window_size * original_window_size)
+            ot_gt_1 = np.sum(cot_original > 1) / (original_window_size * original_window_size)
+            ot_gt_5 = np.sum(cot_original > 5) / (original_window_size * original_window_size)
 
         except Exception as e:
             print(f"Error processing window at x:{i}, y:{j} - {e}")
             ice_flag = np.nan
+            cloud_cover = np.nan
+            ot_gt_1 = np.nan
+            ot_gt_5 = np.nan
             weirgb = np.nan * np.empty((4, 128, 128))
 
         all_scenes_params['y_idx'].append(j)
@@ -146,6 +158,9 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
         all_scenes_params['lon_mid'].append(lon_mid)
         all_scenes_params['lat_mid'].append(lat_mid)
         all_scenes_params['ice_flag'].append(ice_flag)
+        all_scenes_params['cloud_cover'].append(cloud_cover)
+        all_scenes_params['ot_gt_1'].append(ot_gt_1)
+        all_scenes_params['ot_gt_5'].append(ot_gt_5)
 
         all_weirgb.append(weirgb)
 
@@ -212,7 +227,7 @@ def judge(judge_loader, model, class_names, device, save_to=None):
     return all_cats, all_certs
 
 
-def judge_MSI(BT11, BT14, BT15, COD, model_path, device_num='1', debugging=False):
+def judge_GOES(BT11, BT14, BT15, COD, model_path, device_num='1', debugging=False):
     """Main JUDGE function for MSI classification"""
     class_names = ['Solid stratus', 'Closed MCC', 'Open MCC', 'Disorganized MCC', 'Clustered Cu', 'Suppressed Cu']
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -301,7 +316,7 @@ def process_goes_data(region='SEP', data_dir='/home/jmayer/Object_Data/GOES19/',
 
                 print('.' * 85)
                 print('Running JUDGE...')
-                cats, cert, scenes_params = judge_MSI(
+                cats, cert, scenes_params = judge_GOES(
                     ds_11_cropped['BT'], ds_14_cropped['BT'], ds_15_cropped['BT'], 
                     ds_COD_cropped['COD'], model_path, device_num
                 )
