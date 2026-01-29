@@ -6,7 +6,7 @@ import os
 import pyproj
 from pyproj import Transformer
 
-def download_goes19_simple(start_date, end_date, level='L2', satellite_id='19', product='COD2KMF', 
+def download_goes_simple(start_date, end_date, level='L2', satellite_id='19', product='COD2KMF', 
                           save_dir='/home/jmayer/Object_Data/GOES19/'):
     """
     Simple approach: Download full files first, then process
@@ -43,7 +43,7 @@ def download_goes19_simple(start_date, end_date, level='L2', satellite_id='19', 
 
 
 
-def download_goes19_ir_channels(start_date, end_date, satellite_id='19', channels=['07', '14', '15'],
+def download_goes_ir_channels(start_date, end_date, satellite_id='19', channels=['07', '14', '15'],
                                 rad_type='RadF', save_dir='/home/jmayer/Object_Data/GOES19/'):
     """
     Download specific GOES-19 IR channels (corrected for actual filename format)
@@ -105,14 +105,15 @@ def download_goes19_ir_channels(start_date, end_date, satellite_id='19', channel
 
 if __name__ == "__main__":
     satellite_id = '16'  # GOES-16 or GOES-19
-    year = '2024'
+    year = '2025'
 
-    for month in ['08','09','10','11','12']:
+    #for month in ['08','09','10','11','12']:
+    for month in ['01','02','03','04']:
         days_of_month = 31 if month in ['01','03','05','07','08','10','12'] else 30
         if month == '02':
             days_of_month = 28  # Not considering leap years for simplicity
 
-        download_goes19_simple(
+        download_goes_simple(
             start_date=f'{year}-{month}-01 00:00',
             end_date=f'{year}-{month}-{days_of_month} 23:59', 
             satellite_id=satellite_id,
@@ -121,7 +122,7 @@ if __name__ == "__main__":
             save_dir=f'/home/jmayer/Object_Data/GOES{satellite_id}/{year}/{month}/'
         )
         # Download IR window channels 
-        download_goes19_ir_channels(
+        download_goes_ir_channels(
             start_date=f'{year}-{month}-01 00:00',
             end_date=f'{year}-{month}-{days_of_month} 23:59', 
             satellite_id=satellite_id,

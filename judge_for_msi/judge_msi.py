@@ -1,6 +1,6 @@
 import timm
 from torch import nn
-import mytorchutils
+import judge_msi_utils
 import torch
 from torch.utils.data import DataLoader
 import os
@@ -11,7 +11,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # Only need input:
 params = {
     'folder_path': './../Data_preprocess/',  # The path of the folder containing subfolders of .h5 files
-    'model_path': '/home/jmayer/ACI_research/Code/mesoscale_structure/judge_original/64epochs_accuracy0.91456.pth',
+    'model_path': '/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_msi/finetuned_msi_model.pth', # '/home/jmayer/ACI_research/YuanyuanWu-NJU-Cloud-morphology-dataset/Model_judge/64epochs_accuracy0.91456.pth',
     'batch_size': 512,
     'device_num': '1',
     'save_path':'./'
@@ -54,8 +54,8 @@ def judge_MSI(MCOP, MRGR, debugging=False):
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     device = torch.device('cuda:' + params['device_num'] if torch.cuda.is_available() else 'cpu')
 
-    test_dataset = mytorchutils.JudgeDataset(MCOP, MRGR, debugging=debugging)
-    test_len = mytorchutils.JudgeDataset.__len__(test_dataset)
+    test_dataset = judge_msi_utils.JudgeDataset(MCOP, MRGR, debugging=debugging)
+    test_len = judge_msi_utils.JudgeDataset.__len__(test_dataset)
     scene_params = test_dataset.scene_params
     test_dataloader = DataLoader(test_dataset, batch_size=params['batch_size'], shuffle=False)
     model = timm.create_model('resnet50d', pretrained=False)
