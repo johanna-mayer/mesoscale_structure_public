@@ -105,6 +105,15 @@ def load_and_prepare_goes_data(date, time):
     if not os.path.exists(f'{data_dir}/{satellite_small}_C11_RadF_{date}_{time}.nc'):
         print(f"GOES C11 data for {date} {time} not found. Skipping.")
         return None, None, None, None
+    if not os.path.exists(f'{data_dir}/{satellite_small}_C14_RadF_{date}_{time}.nc'):
+        print(f"GOES C14 data for {date} {time} not found. Skipping.")
+        return None, None, None, None
+    if not os.path.exists(f'{data_dir}/{satellite_small}_C15_RadF_{date}_{time}.nc'):
+        print(f"GOES C15 data for {date} {time} not found. Skipping.")
+        return None, None, None, None
+    if not os.path.exists(f'{data_dir}/{satellite_small}_COD2KMF_{date}_{time}.nc'):
+        print(f"GOES COD data for {date} {time} not found. Skipping.")
+        return None, None, None, None
 
     # Load and crop GOES data
     print("Loading C11 data...")
@@ -391,4 +400,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-    
