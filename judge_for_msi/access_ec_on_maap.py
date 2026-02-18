@@ -401,3 +401,47 @@ def get_acmcap_via_maap(datetime_range=None,
                 ACMCAP = ACMCAP.load() # Load data into memory
         ACMCAP_list.append((ACMCAP, orbit))
     return ACMCAP_list
+
+def get_cfmr_via_maap(datetime_range=None, 
+                        region=None, 
+                        frame=None,
+                        orbitNumber=None,
+                        ec_collection = ['EarthCAREL2Validated_MAAP'],
+                        cfmr_variables=None,
+                        max_items=1
+                        ):
+    """Function to access EarthCARE C-FMR data via MAAP."""
+
+    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'CPR_FMR_2A', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
+
+    print("Fetching ESA MAAP token...")
+    ESA_TOKEN = get_token()
+    fs = fsspec.filesystem(
+        "https",
+        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
+        **io_params["fsspec_params"]  )
+
+    CFMR_list = []
+    for ds_url, orbit in ds_url_list:
+        print("Dataset URL:", ds_url)
+        print("Orbit:", orbit)
+        # Open the file and read it into an xarray Dataset
+        with fs.open(ds_url, "rb") as f:
+            with xr.open_dataset(f,
+                                engine="h5netcdf",
+                                **io_params["h5py_params"],
+                                group="ScienceData") as CFMR:
+                # Select only the requested variables
+                if cfmr_variables is not None:
+                    CFMR = CFMR[cfmr_variables]
+                CFMR.encoding = {'source': ds_url}  # Keep track of source URL
+                if region is not None:
+                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
+                    print(f"\tbefore cropping: lat_min, lat_max = {CFMR.latitude.min().values:.2f}, {CFMR.latitude.max().values:.2f}, lon_min, lon_max = {CFMR.longitude.min().values:.2f}, {CFMR.longitude.max().values:.2f}")
+                    CFMR = crop_to_stcu_region(CFMR, region)
+                    print(f" \tafter cropping: lat_min, lat_max = {CFMR.latitude.min().values:.2f}, {CFMR.latitude.max().values:.2f}, lon_min, lon_max = {CFMR.longitude.min().values:.2f}, {CFMR.longitude.max().values:.2f}")
+                if CFMR is None:
+                    continue
+                CFMR = CFMR.load() # Load data into memory
+        CFMR_list.append((CFMR, orbit))
+    return CFMR_list
