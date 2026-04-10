@@ -4,6 +4,7 @@ figures_judge/
 figures_judge_msi/
 figures_judge_goes_NEP/
 figures_judge_goes_SEP/
+analysis/figures/
 
 judge_for_msi/credentials_maap.txt
 judge_for_msi/labeled_msi_data.nc

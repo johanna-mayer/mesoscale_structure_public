@@ -224,7 +224,7 @@ def get_mcop_via_maap(datetime_range=None,
         # Open the file and read it into an xarray Dataset
         with fs.open(ds_url, "rb") as f:
             with xr.open_dataset(f,
-                                engine="h5netcdf",
+                                #engine="h5netcdf",
                                 **io_params["h5py_params"],
                                 group="ScienceData") as MCOP:
                 # Select only the requested variables
@@ -445,3 +445,48 @@ def get_cfmr_via_maap(datetime_range=None,
                 CFMR = CFMR.load() # Load data into memory
         CFMR_list.append((CFMR, orbit))
     return CFMR_list
+
+
+def get_ccd_via_maap(datetime_range=None, 
+                        region=None, 
+                        frame=None,
+                        orbitNumber=None,
+                        ec_collection = ['EarthCAREL2Validated_MAAP'],
+                        ccd_variables=None,
+                        max_items=1
+                        ):
+    """Function to access EarthCARE C-CD data via MAAP."""
+
+    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'CPR_CD__2A', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
+
+    print("Fetching ESA MAAP token...")
+    ESA_TOKEN = get_token()
+    fs = fsspec.filesystem(
+        "https",
+        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
+        **io_params["fsspec_params"]  )
+
+    CCD_list = []
+    for ds_url, orbit in ds_url_list:
+        print("Dataset URL:", ds_url)
+        print("Orbit:", orbit)
+        # Open the file and read it into an xarray Dataset
+        with fs.open(ds_url, "rb") as f:
+            with xr.open_dataset(f,
+                                engine="h5netcdf",
+                                **io_params["h5py_params"],
+                                group="ScienceData") as CCD:
+                # Select only the requested variables
+                if ccd_variables is not None:
+                    CCD = CCD[ccd_variables]
+                CCD.encoding = {'source': ds_url}  # Keep track of source URL
+                if region is not None:
+                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
+                    print(f"\tbefore cropping: lat_min, lat_max = {CCD.latitude.min().values:.2f}, {CCD.latitude.max().values:.2f}, lon_min, lon_max = {CCD.longitude.min().values:.2f}, {CCD.longitude.max().values:.2f}")
+                    CCD = crop_to_stcu_region(CCD, region)
+                    print(f" \tafter cropping: lat_min, lat_max = {CCD.latitude.min().values:.2f}, {CCD.latitude.max().values:.2f}, lon_min, lon_max = {CCD.longitude.min().values:.2f}, {CCD.longitude.max().values:.2f}")
+                if CCD is None:
+                    continue
+                CCD = CCD.load() # Load data into memory
+        CCD_list.append((CCD, orbit))
+    return CCD_list
