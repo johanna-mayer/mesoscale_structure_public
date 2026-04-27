@@ -490,3 +490,48 @@ def get_ccd_via_maap(datetime_range=None,
                 CCD = CCD.load() # Load data into memory
         CCD_list.append((CCD, orbit))
     return CCD_list
+
+
+def get_bmaflx_via_maap(datetime_range=None, 
+                        region=None, 
+                        frame=None,
+                        orbitNumber=None,
+                        ec_collection = ['EarthCAREL2Validated_MAAP'],
+                        bmaflx_variables=None,
+                        max_items=1
+                        ):
+    """Function to access EarthCARE BMA_FLX data via MAAP."""
+
+    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'BMA_FLX_2B', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
+
+    print("Fetching ESA MAAP token...")
+    ESA_TOKEN = get_token()
+    fs = fsspec.filesystem(
+        "https",
+        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
+        **io_params["fsspec_params"]  )
+
+    BMAFLX_list = []
+    for ds_url, orbit in ds_url_list:
+        print("Dataset URL:", ds_url)
+        print("Orbit:", orbit)
+        # Open the file and read it into an xarray Dataset
+        with fs.open(ds_url, "rb") as f:
+            with xr.open_dataset(f,
+                                engine="h5netcdf",
+                                **io_params["h5py_params"],
+                                group="ScienceData/AssessmentResolution") as BMAFLX: # StandardResolution ?
+                # Select only the requested variables
+                if bmaflx_variables is not None:
+                    BMAFLX = BMAFLX[bmaflx_variables]
+                BMAFLX.encoding = {'source': ds_url}  # Keep track of source URL
+                if region is not None:
+                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
+                    print(f"\tbefore cropping: lat_min, lat_max = {BMAFLX.latitude.min().values:.2f}, {BMAFLX.latitude.max().values:.2f}, lon_min, lon_max = {BMAFLX.longitude.min().values:.2f}, {BMAFLX.longitude.max().values:.2f}")
+                    BMAFLX = crop_to_stcu_region(BMAFLX, region)
+                    print(f" \tafter cropping: lat_min, lat_max = {BMAFLX.latitude.min().values:.2f}, {BMAFLX.latitude.max().values:.2f}, lon_min, lon_max = {BMAFLX.longitude.min().values:.2f}, {BMAFLX.longitude.max().values:.2f}")
+                if BMAFLX is None:
+                    continue
+                BMAFLX = BMAFLX.load() # Load data into memory
+        BMAFLX_list.append((BMAFLX, orbit))
+    return BMAFLX_list
