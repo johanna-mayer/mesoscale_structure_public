@@ -11,7 +11,7 @@ from scipy.ndimage import zoom
 import seaborn as sns
 import matplotlib.pyplot as plt
 import sys
-sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_goes')
+sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/step2_judge_for_goes')
 from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
 
 # SEP region (Southeast Pacific)

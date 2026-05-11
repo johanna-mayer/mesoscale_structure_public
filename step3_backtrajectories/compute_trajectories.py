@@ -1,6 +1,6 @@
 """
 this script computes trajectories using the backtrajectory-calculator package (from ERA5 wind data). 
-Starting point for each trajectory are EarthCARE overpass locations.
+Starting point for each trajectory are EarthCARE overpass locations, at the midpoints of the judge CNN windows applied to MSI (i.e. always 64km spaced apart along EarthCARE tracks).
 -------------------------------------------------------------------------------------------------
 Environment: bt_env
 """

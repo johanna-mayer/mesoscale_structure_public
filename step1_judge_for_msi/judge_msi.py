@@ -11,7 +11,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # Only need input:
 params = {
     'folder_path': './../Data_preprocess/',  # The path of the folder containing subfolders of .h5 files
-    'model_path': '/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_msi/finetuned_msi_model.pth', # '/home/jmayer/ACI_research/YuanyuanWu-NJU-Cloud-morphology-dataset/Model_judge/64epochs_accuracy0.91456.pth',
+    'model_path': '/home/jmayer/ACI_research/Code/mesoscale_structure/step1_judge_for_msi/finetuned_msi_model.pth', # '/home/jmayer/ACI_research/YuanyuanWu-NJU-Cloud-morphology-dataset/Model_judge/64epochs_accuracy0.91456.pth',
     'batch_size': 512,
     'device_num': '1',
     'save_path':'./'
