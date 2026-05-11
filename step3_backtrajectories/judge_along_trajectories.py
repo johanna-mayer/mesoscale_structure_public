@@ -15,14 +15,14 @@ from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sys.path.append('../judge_for_goes/')
+sys.path.append('../step2_judge_for_goes/')
 from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
 import judge_goes19
 
 OUTPUT_file_partial = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_partial.nc'
 OUTPUT_file_final = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes.nc'
 INPUT_file_trajectories = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP.nc'
-judge_for_goes_path = '../judge_for_goes/finetuned_goes_model.pth'
+judge_for_goes_path = '../step2_judge_for_goes/finetuned_goes_model.pth'
 
 palette_goes_cats = {0: 'purple', 1: 'steelblue', 2: 'green', 3: 'orange', 4: 'red', 5: 'hotpink', np.nan: 'grey'}
 

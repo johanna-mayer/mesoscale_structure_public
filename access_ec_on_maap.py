@@ -16,7 +16,7 @@ catalog_url = 'https://catalog.maap.eo.esa.int/catalogue/'
 catalog = Client.open(catalog_url)
 
 # Path to credentials file
-CREDENTIALS_FILE = Path('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_msi/credentials_maap.txt')
+CREDENTIALS_FILE = Path('/home/jmayer/ACI_research/Code/mesoscale_structure/step1_judge_for_msi/credentials_maap.txt')
 
 io_params = {
     "fsspec_params": {

@@ -8,7 +8,7 @@ import numpy as np
 import os
 import multiprocessing
 import traceback
-sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/judge_for_msi/')
+sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/')
 import access_ec_on_maap as maap
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
