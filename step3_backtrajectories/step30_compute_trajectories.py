@@ -87,11 +87,11 @@ def main():
         else:
             bt_SEP = xr.concat([bt_SEP, bt], dim='time_startpoint')
 
-        bt_SEP.to_netcdf(f'/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP_new_partial.nc')
+        bt_SEP.to_netcdf(f'/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP_partial.nc')
         #if i > 5:
         #    break  # for testing
         
-    bt_SEP.to_netcdf('/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP_new.nc')
+    bt_SEP.to_netcdf('/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP.nc')
     print(f'Failed indices: {failed_indices}')
 
 if __name__ == "__main__":
