@@ -17,7 +17,7 @@ import seaborn as sns
 
 sys.path.append('../step2_judge_for_goes/')
 from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
-import judge_goes19
+import judge_goes
 
 OUTPUT_file_partial = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_partial.nc'
 OUTPUT_file_final = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes.nc'
@@ -88,7 +88,7 @@ def set_up_results_dataset(bt_SEP_hourly):
 def load_and_prepare_goes_data(date, time):
     ts = pd.to_datetime(date + time)
 
-    lat_bounds, lon_bounds, times = judge_goes19.setup_region_parameters(region='SEP')
+    lat_bounds, lon_bounds, times = judge_goes.setup_region_parameters(region='SEP')
     year = date[0:4]
     month = date[4:6]
     if date < '20250407':
@@ -309,7 +309,7 @@ def process_goes_for_trajectory_timestep(date, time, bt_SEP_hourly, fine_tuned_m
 
     # Preprocess data for model input
     xy_indices = list(zip(traj_goes_indices_x, traj_goes_indices_y))
-    all_weirgb, all_scenes_params = judge_goes19.preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=xy_indices, debugging=False)
+    all_weirgb, all_scenes_params = judge_goes.preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=xy_indices, debugging=False)
 
     # Run inference
     predictions, probabilities = run_judge_on_goes_data(all_weirgb, fine_tuned_model)

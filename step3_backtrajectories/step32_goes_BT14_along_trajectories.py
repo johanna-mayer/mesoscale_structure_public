@@ -7,7 +7,7 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 
-from judge_along_trajectories import *
+from step31_judge_along_trajectories import *
 
 bt_with_goes_file = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes.nc'
 OUTPUT_file_partial = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_BT14_partial.nc'
@@ -15,7 +15,7 @@ OUTPUT_file_partial = '/home/jmayer/ACI_research/Code/resources_mesoscale_struct
 def load_and_prepare_goes_BT14_data(date, time):
     ts = pd.to_datetime(date + time)
 
-    lat_bounds, lon_bounds, times = judge_goes19.setup_region_parameters(region='SEP')
+    lat_bounds, lon_bounds, times = judge_goes.setup_region_parameters(region='SEP')
     year = date[0:4]
     month = date[4:6]
     if date < '20250407':

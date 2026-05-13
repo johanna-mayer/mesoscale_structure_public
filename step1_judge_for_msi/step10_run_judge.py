@@ -13,7 +13,7 @@ import access_ec_on_maap as maap
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-regions_of_interest = ['NEA'] #, 'NEA', 'SEP', 'NEP'
+regions_of_interest = ['SEA'] #, 'NEA', 'SEP', 'NEP'
 # Specification of directories and files
 OUTPUT_FILE = f'/home/jmayer/ACI_research/Code/resources_mesoscale_structure/judge_msi_results_{regions_of_interest[0]}.csv'
 OUTPUT_PLOT = current_dir + '/../figures_judge_msi/'
