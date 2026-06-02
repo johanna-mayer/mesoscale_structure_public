@@ -4,6 +4,8 @@ figures_judge/
 figures_judge_msi/
 figures_judge_goes_NEP/
 figures_judge_goes_SEP/
+mesoscale_structure_day_vs_night/
+
 step5_analysis_closed_open_cells/figures/
 
 step1_judge_for_msi/credentials_maap.txt

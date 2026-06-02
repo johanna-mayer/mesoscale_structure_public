@@ -16,9 +16,6 @@ def load_judge_msi_results():
     judge_results = pd.read_csv('/home/jmayer/ACI_research/Code/resources_mesoscale_structure/judge_msi_results_SEP.csv')
     judge_SEP = judge_results[(judge_results['lat_mid'] >= -25) & (judge_results['lat_mid'] <= -2.5) &
                                         (judge_results['lon_mid'] >= -95) & (judge_results['lon_mid'] <= -75)]
-    
-    # TODO remove filter for time
-    judge_SEP = judge_SEP[pd.to_datetime(judge_SEP['time_mid']) >= pd.to_datetime('2025-08-31')]
 
     return judge_SEP
 
