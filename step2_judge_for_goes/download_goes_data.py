@@ -43,13 +43,13 @@ def download_goes_simple(start_date, end_date, level='L2', satellite_id='19', pr
 
 
 
-def download_goes_ir_channels(start_date, end_date, satellite_id='19', channels=['07', '14', '15'],
+def download_goes_ir_channels(start_date, end_date, satellite_id='19', channels=['11', '14', '15'],
                                 rad_type='RadF', save_dir='/home/jmayer/Object_Data/GOES19/'):
     """
     Download specific GOES-19 IR channels (corrected for actual filename format)
     
     Parameters:
-    - channels: List of channel numbers as strings ['07', '14', '15']
+    - channels: List of channel numbers as strings ['11', '14', '15']
     - rad_type: 'RadC' (CONUS), 'RadF' (Full Disk), or 'RadM' (Mesoscale)
     """
     os.makedirs(save_dir, exist_ok=True)
@@ -84,7 +84,7 @@ def download_goes_ir_channels(start_date, end_date, satellite_id='19', channels=
             
             # Filter files for each requested channel
             for channel in channels:
-                # Look for pattern like -M6C07_ in filename
+                # Look for pattern like -M6C11_ in filename
                 channel_files = [f for f in files if f'-M6C{channel}_' in f]
                 
                 if channel_files:
@@ -104,7 +104,7 @@ def download_goes_ir_channels(start_date, end_date, satellite_id='19', channels=
 
 
 if __name__ == "__main__":
-    satellite_id = '16'  # GOES-16 or GOES-19
+    satellite_id = '16'  # '16' or '19' for GOES-16 or GOES-19
     year = '2025'
 
     #for month in ['08','09','10','11','12']:

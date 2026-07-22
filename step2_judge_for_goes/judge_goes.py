@@ -45,24 +45,24 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
     scale_factor = 2
     latitudes = zoom(BT_11.latitude.values, scale_factor, order=1)
     longitudes = zoom(BT_11.longitude.values, scale_factor, order=1)
-    BT_11 = zoom(BT_11.values, scale_factor, order=1)
-    BT_14 = zoom(BT_14.values, scale_factor, order=1)
-    BT_15 = zoom(BT_15.values, scale_factor, order=1)
-    BT_11 = xr.DataArray(BT_11, dims=['y', 'x'])
-    BT_14 = xr.DataArray(BT_14, dims=['y', 'x'])
-    BT_15 = xr.DataArray(BT_15, dims=['y', 'x'])
+    BT_11_interpolated = zoom(BT_11.values, scale_factor, order=1)
+    BT_14_interpolated = zoom(BT_14.values, scale_factor, order=1)
+    BT_15_interpolated = zoom(BT_15.values, scale_factor, order=1)
+    BT_11_interpolated = xr.DataArray(BT_11_interpolated, dims=['y', 'x'])
+    BT_14_interpolated = xr.DataArray(BT_14_interpolated, dims=['y', 'x'])
+    BT_15_interpolated = xr.DataArray(BT_15_interpolated, dims=['y', 'x'])
 
     if xy_indices is None:
         # make a grid of indices, s.t. they are always 128 pixels apart
-        y_indices = np.arange(64, BT_11.shape[0] - 64, 64)
-        x_indices = np.arange(64, BT_11.shape[1] - 64, 64)
+        y_indices = np.arange(64, BT_11_interpolated.shape[0] - 64, 64)
+        x_indices = np.arange(64, BT_11_interpolated.shape[1] - 64, 64)
         # Create all coordinate combinations
         y_grid, x_grid = np.meshgrid(y_indices, x_indices, indexing='ij')
         xy_indices = list(zip(x_grid.flatten(), y_grid.flatten()))
 
     num_scenes = len(xy_indices)
     all_weirgb = []
-    all_scenes_params = {'y_idx': [], 'x_idx': [], 'lon_mid': [], 'lat_mid': [], 'ice_flag': [], 'cloud_cover': [], 'ot_gt_1': [], 'ot_gt_5': []}
+    all_scenes_params = {'y_idx': [], 'x_idx': [], 'lon_mid': [], 'lat_mid': [], 'ice_flag': [], 'cloud_cover': [], 'cot_gt_1': [], 'cot_gt_5': [], 'cot': [], 'bt14': []}
     
     for i,j in xy_indices:
         lat_mid = latitudes[j, i]
@@ -70,11 +70,11 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
 
         try:
             # get window data
-            data11 = BT_11[j - window_size // 2 : j + window_size // 2,
+            data11 = BT_11_interpolated[j - window_size // 2 : j + window_size // 2,
                             i - window_size // 2 : i + window_size // 2].values
-            data22 = BT_14[j - window_size // 2 : j + window_size // 2,
+            data22 = BT_14_interpolated[j - window_size // 2 : j + window_size // 2,
                             i - window_size // 2 : i + window_size // 2].values
-            data33 = BT_15[j - window_size // 2 : j + window_size // 2,
+            data33 = BT_15_interpolated[j - window_size // 2 : j + window_size // 2,
                             i - window_size // 2 : i + window_size // 2].values
 
             gama_R = 1
@@ -133,24 +133,33 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
                 plt.title('COT Channel')
                 plt.show()
 
-            ice_pixel = (data22 < 273)
-            ice_flag = np.sum(ice_pixel) / (window_size * window_size)
-            # Compute cloud cover from original resolution COD
+            # Save mean cloud variables (from original resolution)
             orig_i, orig_j = i // 2, j // 2  # Convert to original resolution indices
             original_window_size = window_size // 2  # Since we're upscaling by 2x
             cot_original = COD[orig_j - original_window_size // 2 : orig_j + original_window_size // 2,
                               orig_i - original_window_size // 2 : orig_i + original_window_size // 2].values
-            # Compute cloud cover from original resolution
+            # Compute cloud cover and COT from original resolution
             cloud_cover = np.sum(cot_original > 0) / (original_window_size * original_window_size)
-            ot_gt_1 = np.sum(cot_original > 1) / (original_window_size * original_window_size)
-            ot_gt_5 = np.sum(cot_original > 5) / (original_window_size * original_window_size)
+            cot_gt_1 = np.sum(cot_original > 1) / (original_window_size * original_window_size)
+            cot_gt_5 = np.sum(cot_original > 5) / (original_window_size * original_window_size)
+            cot_mean = np.mean(cot_original)
+            # Extract BT_14 values from original resolution 
+            bt14_original = BT_14[orig_j - original_window_size // 2 : orig_j + original_window_size // 2,
+                              orig_i - original_window_size // 2 : orig_i + original_window_size // 2].values
+            bt14_mean = np.mean(bt14_original)
+
+            ice_pixel = (bt14_original < 273)
+            ice_flag = np.sum(ice_pixel) / (original_window_size * original_window_size)
+
 
         except Exception as e:
             print(f"Error processing window at x:{i}, y:{j} - {e}")
             ice_flag = np.nan
             cloud_cover = np.nan
-            ot_gt_1 = np.nan
-            ot_gt_5 = np.nan
+            cot_gt_1 = np.nan
+            cot_gt_5 = np.nan
+            cot_mean = np.nan
+            bt14_mean = np.nan
             weirgb = np.nan * np.empty((4, 128, 128))
 
         all_scenes_params['y_idx'].append(j)
@@ -159,8 +168,10 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
         all_scenes_params['lat_mid'].append(lat_mid)
         all_scenes_params['ice_flag'].append(ice_flag)
         all_scenes_params['cloud_cover'].append(cloud_cover)
-        all_scenes_params['ot_gt_1'].append(ot_gt_1)
-        all_scenes_params['ot_gt_5'].append(ot_gt_5)
+        all_scenes_params['cot_gt_1'].append(cot_gt_1)
+        all_scenes_params['cot_gt_5'].append(cot_gt_5)
+        all_scenes_params['cot'].append(cot_mean)
+        all_scenes_params['bt14'].append(bt14_mean)
 
         all_weirgb.append(weirgb)
 

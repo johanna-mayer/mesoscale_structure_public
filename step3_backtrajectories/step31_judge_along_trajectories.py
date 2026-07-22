@@ -22,6 +22,13 @@ import judge_goes
 OUTPUT_file_partial = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_partial.nc'
 OUTPUT_file_final = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes.nc'
 INPUT_file_trajectories = '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_SEP.nc'
+
+####### TEMPORARY!! overwrite global veriables in step31_judge_along_trajectories.py ########
+OUTPUT_file_partial = '/home/jmayer/ACI_research/Code/mesoscale_structure/mesoscale_structure_day_vs_night/bt_with_goes_night_partial.nc'
+OUTPUT_file_final = '/home/jmayer/ACI_research/Code/mesoscale_structure/mesoscale_structure_day_vs_night/bt_with_goes_night.nc'
+INPUT_file_trajectories = '/home/jmayer/ACI_research/Code/mesoscale_structure/mesoscale_structure_day_vs_night/bt_SEP_night_partial.nc'
+################################################################################
+
 judge_for_goes_path = '../step2_judge_for_goes/finetuned_goes_model.pth'
 
 palette_goes_cats = {0: 'purple', 1: 'steelblue', 2: 'green', 3: 'orange', 4: 'red', 5: 'hotpink', np.nan: 'grey'}
@@ -67,12 +74,15 @@ def set_up_results_dataset(bt_SEP_hourly):
     results['goes_cert'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_ice_flag'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_cloud_cover'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
-    results['goes_ot_gt_1'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
-    results['goes_ot_gt_5'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
+    results['goes_cot_gt_1'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
+    results['goes_cot_gt_5'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
+    results['goes_cot'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
+    results['goes_bt14'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_y_idx'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_x_idx'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_lon_mid'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_lat_mid'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
+    results['day_flag'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
 
     # Load existing partial results if available
     if os.path.isfile(OUTPUT_file_partial):
@@ -285,18 +295,20 @@ def summary_plot_results(df_traj_points_at_datetime, COD):
 
 
 def process_goes_for_trajectory_timestep(date, time, bt_SEP_hourly, fine_tuned_model, plot_results=False):
-    # Load and prepare GOES data
-    ds_11_cropped, ds_14_cropped, ds_15_cropped, ds_COD_cropped = load_and_prepare_goes_data(date, time)
-    if ds_11_cropped is None:
-        return None
-    BT_11, BT_14, BT_15, COD = ds_11_cropped['BT'], ds_14_cropped['BT'], ds_15_cropped['BT'], ds_COD_cropped['COD']
-
     # get trajectory points for the current date and time
     traj_points_at_datetime = bt_SEP_hourly.where(bt_SEP_hourly.datetime_traj.dt.strftime('%Y%m%d%H%M') == date + time, drop=True)
     #sns.scatterplot(x=traj_points_at_datetime['lon_traj'].values.flatten(), y=traj_points_at_datetime['lat_traj'].values.flatten())
     # transform to dataframe for easier handling
     df_traj_points_at_datetime = traj_points_at_datetime.to_dataframe().reset_index()
     df_traj_points_at_datetime.dropna(subset=['lat_traj', 'lon_traj'], inplace=True)
+    if len(df_traj_points_at_datetime) == 0:
+        raise ValueError(f"No trajectory points found for datetime {date} {time}.")
+
+    # Load and prepare GOES data
+    ds_11_cropped, ds_14_cropped, ds_15_cropped, ds_COD_cropped = load_and_prepare_goes_data(date, time)
+    if ds_11_cropped is None:
+        return None
+    BT_11, BT_14, BT_15, COD = ds_11_cropped['BT'], ds_14_cropped['BT'], ds_15_cropped['BT'], ds_COD_cropped['COD']
 
     # get GOES latitude and longitude values (zoomed by the scale factor that is also used for the CNN)
     scale_factor = 2
@@ -324,8 +336,10 @@ def process_goes_for_trajectory_timestep(date, time, bt_SEP_hourly, fine_tuned_m
     df_traj_points_at_datetime['goes_cats'] = np.where(np.isnan(df_traj_points_at_datetime['goes_cert']), np.nan, df_traj_points_at_datetime['goes_cats'])
     df_traj_points_at_datetime['goes_ice_flag'] = all_scenes_params['ice_flag']
     df_traj_points_at_datetime['goes_cloud_cover'] = all_scenes_params['cloud_cover']
-    df_traj_points_at_datetime['goes_ot_gt_1'] = all_scenes_params['ot_gt_1']
-    df_traj_points_at_datetime['goes_ot_gt_5'] = all_scenes_params['ot_gt_5']
+    df_traj_points_at_datetime['goes_cot_gt_1'] = all_scenes_params['cot_gt_1']
+    df_traj_points_at_datetime['goes_cot_gt_5'] = all_scenes_params['cot_gt_5']
+    df_traj_points_at_datetime['goes_cot'] = all_scenes_params['cot']
+    df_traj_points_at_datetime['goes_bt14'] = all_scenes_params['bt14']
     df_traj_points_at_datetime['goes_y_idx'] = all_scenes_params['y_idx']
     df_traj_points_at_datetime['goes_x_idx'] = all_scenes_params['x_idx']
     df_traj_points_at_datetime['goes_lat_mid'] = all_scenes_params['lat_mid']
@@ -360,7 +374,7 @@ def main():
     fine_tuned_model = load_model(judge_for_goes_path)
 
     # available GOES times
-    time_list = ['1400', '1600', '1800', '2000', '2200']
+    time_list = ['0000', '0200', '0400', '0600', '0800', '1000', '1200', '1400', '1600', '1800', '2000', '2200']
 
     for year in ['2024','2025']:
         if year == '2024':
@@ -379,16 +393,33 @@ def main():
                 date=year + month + day
                 for time in time_list:
                     # check if GOES data has already been processed for this date and time
-                    goes_cats_at_datetime = results.where(results.datetime_traj.dt.strftime('%Y%m%d%H%M') == date + time, drop=True).goes_cats
+                    target_day = np.datetime64(f"{year}-{month}-{day}", "D")
+                    target_hour = int(time[:2])
+                    goes_cats_at_datetime = results["goes_cats"].where(
+                            (results.datetime_traj.dt.floor("D") == target_day) &
+                            (results.datetime_traj.dt.hour == target_hour),
+                            drop=True
+                        )
                     if len(goes_cats_at_datetime) == 0:
                         print(f"Datetime does not exist in trajectory data: {date} {time}. Something went wrong.")
                         break
-                    if ~np.isnan(goes_cats_at_datetime).all():
+                    #if not np.isnan(goes_cats_at_datetime).all():
+                    if (not goes_cats_at_datetime.isnull().all(dim='time_startpoint').any()) or (time not in ['1400', '1600', '1800', '2000', '2200']): # look into each time_startpoint, if there is at least one non-nan value for goes_cats
                         print(f"GOES data already processed for {date} {time}. Skipping.")
                         continue
+                    
+                    try:
+                        results_at_datetime = process_goes_for_trajectory_timestep(date, time, bt_SEP_hourly, fine_tuned_model, plot_results=False)
+                    except ValueError as e:
+                        print(e)
+                        continue
 
-                    results_at_datetime = process_goes_for_trajectory_timestep(date, time, bt_SEP_hourly, fine_tuned_model, plot_results=False)
                     if results_at_datetime is not None:
+                        # add a day-night flag
+                        day_flag = 1 if time in ['1400', '1600', '1800', '2000', '2200'] else 0
+                        results_at_datetime['day_flag'] = (('time_startpoint', 'timestep'), np.full(results_at_datetime['goes_cats'].shape, day_flag))
+                        results_at_datetime['day_flag'] = results_at_datetime['day_flag'].where(~results_at_datetime.datetime_traj.isnull())
+                        
                         results = xr.merge([results, results_at_datetime])
                         print(f"Updated results dataset for {date} {time}\n")
                 
