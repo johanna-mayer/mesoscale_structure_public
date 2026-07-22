@@ -34,9 +34,9 @@ judge_for_goes_path = '../step2_judge_for_goes/finetuned_goes_model.pth'
 palette_goes_cats = {0: 'purple', 1: 'steelblue', 2: 'green', 3: 'orange', 4: 'red', 5: 'hotpink', np.nan: 'grey'}
 
 
-def interpolate_trajectories_hourly(bt_SEP):
+def interpolate_trajectories(bt_SEP, target_step_minutes=120):
     """
-    Interpolate backtrajectory data from 6-hourly to hourly timesteps.
+    Interpolate backtrajectory data from 6-hourly to target_step_minutes timesteps.
     
     Parameters:
     -----------
@@ -46,26 +46,31 @@ def interpolate_trajectories_hourly(bt_SEP):
     Returns:
     --------
     xarray.Dataset
-        Interpolated trajectory data with hourly timesteps
+        Interpolated trajectory data with target_step_minutes timesteps
     """
-    # Create new hourly timestep coordinate
-    # Find the range of timesteps
-    min_timestep = bt_SEP.timestep.min().values
-    max_timestep = bt_SEP.timestep.max().values
+
+    # Find timestep range
+    timestep = bt_SEP["timestep"]
+    min_timestep = timestep.min().item()
+    max_timestep = timestep.max().item()
+
+    # Build target timesteps; the original timestep units are in hours, so we convert target_step_minutes to hours
+    step = target_step_minutes / 60.0
+    new_timesteps = np.arange(
+        float(min_timestep),
+        float(max_timestep) + step * 0.5,
+        step,
+    )
+
+    # Interpolate all variables on the new timestep grid
+    bt_interp = bt_SEP.interp(timestep=new_timesteps, method="linear")
+
+    # Handle datetime_traj explicitly (datetime -> int64 -> interpolate -> datetime)
+    datetime_numeric = bt_SEP["datetime_traj"].astype("datetime64[ns]").astype(np.int64)
+    datetime_interp = datetime_numeric.interp(timestep=new_timesteps, method="linear")
+    bt_interp["datetime_traj"] = datetime_interp.round().astype("datetime64[ns]")
     
-    # Create hourly timesteps
-    hourly_timesteps = np.arange(min_timestep, max_timestep + 1, 2)  # Every 2 hours
-    
-    # Interpolate each variable
-    bt_hourly = bt_SEP.interp(timestep=hourly_timesteps, method='linear')
-    
-    # For datetime_traj, we need to handle it specially since it's datetime data
-    # Convert to numeric (nanoseconds since epoch), interpolate, then convert back
-    datetime_numeric = bt_SEP.datetime_traj.astype('datetime64[ns]').astype(np.int64)
-    datetime_interp = datetime_numeric.interp(timestep=hourly_timesteps, method='linear')
-    bt_hourly['datetime_traj'] = datetime_interp.astype('datetime64[ns]')
-    
-    return bt_hourly
+    return bt_interp
 
 
 def set_up_results_dataset(bt_SEP_hourly):
@@ -361,7 +366,7 @@ def main():
         bt_SEP = ds.load()
 
     # Apply the interpolation
-    bt_SEP_hourly = interpolate_trajectories_hourly(bt_SEP)
+    bt_SEP_hourly = interpolate_trajectories(bt_SEP, target_step_minutes=120)
     print(f"Original timesteps: {len(bt_SEP.timestep)} (every 6h)")
     print(f"Interpolated timesteps: {len(bt_SEP_hourly.timestep)} (every 2h)")
     print(f"Original timestep range: {bt_SEP.timestep.min().values} to {bt_SEP.timestep.max().values}")
