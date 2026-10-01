@@ -142,7 +142,7 @@ def preprocess_data(BT_11, BT_14, BT_15, COD, window_size=128, xy_indices=None, 
             cloud_cover = np.sum(cot_original > 0) / (original_window_size * original_window_size)
             cot_gt_1 = np.sum(cot_original > 1) / (original_window_size * original_window_size)
             cot_gt_5 = np.sum(cot_original > 5) / (original_window_size * original_window_size)
-            cot_mean = np.mean(cot_original)
+            cot_mean = np.mean(cot_original[cot_original > 0]) if np.any(cot_original > 0) else np.nan
             # Extract BT_14 values from original resolution 
             bt14_original = BT_14[orig_j - original_window_size // 2 : orig_j + original_window_size // 2,
                               orig_i - original_window_size // 2 : orig_i + original_window_size // 2].values

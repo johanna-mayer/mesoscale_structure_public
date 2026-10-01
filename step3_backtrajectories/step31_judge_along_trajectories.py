@@ -61,19 +61,32 @@ def interpolate_trajectories(bt_SEP, target_step_minutes=120):
         float(max_timestep) + step * 0.5,
         step,
     )
+    new_timesteps = new_timesteps.round(5)  # round to avoid floating point issues
 
     # Interpolate all variables on the new timestep grid
     bt_interp = bt_SEP.interp(timestep=new_timesteps, method="linear")
 
-    # Handle datetime_traj explicitly (datetime -> int64 -> interpolate -> datetime)
+    # Handle datetime_traj explicitly and keep NaT values out of numeric interpolation.
+    # NaT is encoded as int64 min; if not masked, interpolation can create bogus ancient dates.
+    nat_int = np.iinfo(np.int64).min
     datetime_numeric = bt_SEP["datetime_traj"].astype("datetime64[ns]").astype(np.int64)
+    datetime_numeric = datetime_numeric.where(datetime_numeric != nat_int, np.nan).astype(np.float64)
+
     datetime_interp = datetime_numeric.interp(timestep=new_timesteps, method="linear")
-    bt_interp["datetime_traj"] = datetime_interp.round().astype("datetime64[ns]")
+
+    valid_dt = np.isfinite(datetime_interp)
+    datetime_interp_ns = (
+        datetime_interp.where(valid_dt, 0)
+        .round()
+        .astype(np.int64)
+        .astype("datetime64[ns]")
+    )
+    bt_interp["datetime_traj"] = datetime_interp_ns.where(valid_dt).dt.round("min")
     
     return bt_interp
 
 
-def set_up_results_dataset(bt_SEP_hourly):
+def set_up_results_dataset(bt_SEP_hourly, existing_results_file=OUTPUT_file_partial):
     results = bt_SEP_hourly.copy()
     results['goes_cats'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
     results['goes_cert'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
@@ -90,8 +103,8 @@ def set_up_results_dataset(bt_SEP_hourly):
     results['day_flag'] = (('time_startpoint', 'timestep'), np.full(bt_SEP_hourly['lat_traj'].shape, np.nan))
 
     # Load existing partial results if available
-    if os.path.isfile(OUTPUT_file_partial):
-        with xr.open_dataset(OUTPUT_file_partial) as results_existing:
+    if os.path.isfile(existing_results_file):
+        with xr.open_dataset(existing_results_file) as results_existing:
             print("Loading existing results from disk...")
             results_existing.load()
 
