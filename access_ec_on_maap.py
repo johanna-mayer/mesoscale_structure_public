@@ -1,94 +1,105 @@
 """
-Functions are adapted from https://docs.maap-project.org/en/develop/science/EarthCARE/EarthCARE_access_and_visualize.html
+Functions adapted from:
+https://docs.maap-project.org/en/develop/science/EarthCARE/EarthCARE_access_and_visualize.html
 """
 
+from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
-from pystac_client import Client
+import sys
+
 import fsspec
-import xarray as xr
 import numpy as np
 import requests
-import sys
+import xarray as xr
+from pystac_client import Client
+
 sys.path.append("/home/jmayer/ACI_research/ectools/")
 from ectools import ecio
 
-catalog_url = 'https://catalog.maap.eo.esa.int/catalogue/'
+catalog_url = "https://catalog.maap.eo.esa.int/catalogue/"
 catalog = Client.open(catalog_url)
 
 # Path to credentials file
-CREDENTIALS_FILE = Path('/home/jmayer/ACI_research/Code/mesoscale_structure/step1_judge_for_msi/credentials_maap.txt')
+CREDENTIALS_FILE = Path(
+    "/home/jmayer/ACI_research/Code/mesoscale_structure/step1_judge_for_msi/credentials_maap.txt"
+)
 
 io_params = {
     "fsspec_params": {
         "cache_type": "blockcache",
-        "block_size": 8 * 1024 * 1024
+        "block_size": 8 * 1024 * 1024,
     },
     "h5py_params": {
         "driver_kwds": {
-            "rdcc_nbytes": 8 * 1024 * 1024
+            "rdcc_nbytes": 8 * 1024 * 1024,
         }
-    }
+    },
 }
 
 bbox_regions = {
-    'global': {'lat': (-90, 90), 'lon': (-180, 180)},
-    #
-    'SEA': {'lat': (-22.5, -2.5), 'lon': (-5, 15)},    # South East Atlantic
-    'NEA': {'lat': (10, 30), 'lon': (-40, -20)},   # North East Atlantic
-    'SEP': {'lat': (-22.5, -2.5), 'lon': (-95, -75)},  # South East Pacific
-    'NEP': {'lat': (15, 35), 'lon': (-135, -115)}, # North East Pacific
-    #
-    'SEA_coastal': {'lat': (-22.5, -2.5), 'lon': (-5, 15)},    # South East Atlantic coastal region
-    'SEP_coastal': {'lat': (-22.5, -2.5), 'lon': (-90, -70)},  # South East Pacific coastal region
-    'NEP_coastal': {'lat': (15, 35), 'lon': (-125, -105)}, # North East Pacific coastal region
+    "global": {"lat": (-90, 90), "lon": (-180, 180)},
+    "SEA": {"lat": (-22.5, -2.5), "lon": (-5, 15)},
+    "NEA": {"lat": (10, 30), "lon": (-40, -20)},
+    "SEP": {"lat": (-22.5, -2.5), "lon": (-95, -75)},
+    "NEP": {"lat": (15, 35), "lon": (-135, -115)},
+    "SEA_coastal": {"lat": (-22.5, -2.5), "lon": (-5, 15)},
+    "SEP_coastal": {"lat": (-22.5, -2.5), "lon": (-90, -70)},
+    "NEP_coastal": {"lat": (15, 35), "lon": (-125, -105)},
 }
+
+default_product_version = "ba"
+
 
 def load_credentials(file_path=CREDENTIALS_FILE):
     """Read key-value pairs from a credentials file into a dictionary."""
     creds = {}
     if not file_path.exists():
         raise FileNotFoundError(f"Credentials file not found: {file_path}")
-    with open(file_path, "r") as f:
+
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
+            if not line or line.startswith("#") or "=" not in line:
                 continue
             key, value = line.split("=", 1)
             creds[key.strip()] = value.strip()
     return creds
 
 
-# --- ESA MAAP API ---
+def list_available_collections():
+    """Return collection IDs and titles exposed by the MAAP EarthCARE catalog."""
+    return [
+        (collection.id, getattr(collection, "title", None))
+        for collection in catalog.get_collections()
+    ]
 
+
+@lru_cache(maxsize=1)
 def get_token():
     """Use OFFLINE_TOKEN to fetch a short-lived access token."""
     creds = load_credentials()
 
-    OFFLINE_TOKEN = creds.get("OFFLINE_TOKEN")
-    CLIENT_ID = creds.get("CLIENT_ID")
-    CLIENT_SECRET = creds.get("CLIENT_SECRET")
-    print(CLIENT_SECRET)
+    offline_token = creds.get("OFFLINE_TOKEN")
+    client_id = creds.get("CLIENT_ID")
+    client_secret = creds.get("CLIENT_SECRET")
 
-    if not all([OFFLINE_TOKEN, CLIENT_ID, CLIENT_SECRET]):
+    if not all([offline_token, client_id, client_secret]):
         raise ValueError("Missing OFFLINE_TOKEN, CLIENT_ID, or CLIENT_SECRET in credentials file")
 
     url = "https://iam.maap.eo.esa.int/realms/esa-maap/protocol/openid-connect/token"
     data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "client_id": client_id,
+        "client_secret": client_secret,
         "grant_type": "refresh_token",
-        "refresh_token": OFFLINE_TOKEN,
-        "scope": "offline_access openid"
+        "refresh_token": offline_token,
+        "scope": "offline_access openid",
     }
 
-    response = requests.post(url, data=data)
+    response = requests.post(url, data=data, timeout=60)
     response.raise_for_status()
 
-    response_json = response.json()
-    access_token = response_json.get('access_token')
-
+    access_token = response.json().get("access_token")
     if not access_token:
         raise RuntimeError("Failed to retrieve access token from IAM response")
 
@@ -96,540 +107,603 @@ def get_token():
 
 
 def region_to_bbox(region):
-    """Convert region name to bounding box coordinates."""
-    lat_min, lat_max = bbox_regions[region]['lat']
-    lon_min, lon_max = bbox_regions[region]['lon']
+    """Convert region name to [lon_min, lat_min, lon_max, lat_max]."""
+    if region not in bbox_regions:
+        raise KeyError(f"Unknown region '{region}'. Available: {list(bbox_regions)}")
+    lat_min, lat_max = bbox_regions[region]["lat"]
+    lon_min, lon_max = bbox_regions[region]["lon"]
     return [lon_min, lat_min, lon_max, lat_max]
 
 
-def crop_by_lon_or_lat(ds_EC, lon_or_lat_var, l_min, l_max, sel_across_track_idx=None):
-    if sel_across_track_idx is not None:
-        ds = ds_EC.sel(across_track=sel_across_track_idx)
-    else:
-        ds = ds_EC
+def _to_iso_utc(value):
+    """Convert common datetime inputs to RFC3339 UTC with trailing Z."""
+    if isinstance(value, str):
+        s = value.strip()
+        if s.endswith("Z"):
+            return s
+        if "T" in s:
+            return s + "Z"
+        return s + "T00:00:00Z"
 
-    if np.isfinite(ds[lon_or_lat_var].values[0]) and np.isfinite(ds[lon_or_lat_var].values[-1]):
-        lonlat_descending = ds[lon_or_lat_var].values[0] > ds[lon_or_lat_var].values[-1]
-    else:
-        raise ValueError(f"Cannot determine whether {lon_or_lat_var} is ascending or descending due to NaN values at the edges.")
-    
-    if lonlat_descending:
-        l_start = l_max
-        l_stop = l_min
-    else:
-        l_start = l_min
-        l_stop = l_max
+    if isinstance(value, np.datetime64):
+        if np.isnat(value):
+            raise ValueError("NaT is not a valid datetime input.")
+        value_ns = value.astype("datetime64[ns]").astype("int64")
+        dt = datetime.fromtimestamp(value_ns / 1e9, tz=timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    i_start = np.nanargmin(np.abs(ds[lon_or_lat_var].values - l_start))
-    i_stop = np.nanargmin(np.abs(ds[lon_or_lat_var].values - l_stop))
+    if isinstance(value, datetime):
+        dt = value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    print(f"\t Crop by {lon_or_lat_var}: Selecting frame from {i_start} ({lon_or_lat_var}={ds[lon_or_lat_var].values[i_start]:.2f}) to {i_stop} ({lon_or_lat_var}={ds[lon_or_lat_var].values[i_stop]:.2f})")
-    ds_cropped = ds_EC.isel({'along_track':slice(i_start, i_stop)})
-
-    return ds_cropped
+    raise TypeError(f"Unsupported datetime value type: {type(value)}")
 
 
-def crop_to_stcu_region(ds_EC, region, sel_across_track_idx=None):
-    lat_min, lat_max = bbox_regions[region]['lat']
-    lon_min, lon_max = bbox_regions[region]['lon']
-    
-    tmp = crop_by_lon_or_lat(ds_EC=ds_EC, lon_or_lat_var='latitude', l_min=lat_min, l_max=lat_max, sel_across_track_idx=sel_across_track_idx)
-    ds_cropped = crop_by_lon_or_lat(ds_EC=tmp, lon_or_lat_var='longitude', l_min=lon_min, l_max=lon_max, sel_across_track_idx=sel_across_track_idx)
-    
-    return ds_cropped
+def _normalize_datetime_range(datetime_range):
+    """
+    Return a STAC-compatible datetime interval string.
 
-
-def get_ec_data_url_via_maap(datetime_range, 
-                             product, 
-                             region=None,
-                             frame=None,
-                             orbitNumber=None,
-                             productVersion = 'ba',
-                             ec_collection=['EarthCAREL2Validated_MAAP'],
-                             max_items=5):
-
+    This avoids datetime arithmetic that can trigger NumPy datetime ufunc errors.
+    """
     if datetime_range is None:
-        datetime_today = np.datetime64('now', 'D')
-        datetime_range = ['2024-07-01T00:00:00Z', str(datetime_today) + 'T23:59:00Z']
-    filter = f"productType = '{product}'"
-    if frame is not None:
-        filter += f" and frame = '{frame}'"
-    if orbitNumber is not None:
-        filter += f" and orbitNumber = {orbitNumber}"
-    if productVersion is not None:
-        filter += f" and productVersion = '{productVersion}'"
-    if region is None:
-        region = 'global'
-    if orbitNumber is not None and product == 'MSI_NOM_1B':
-        region = 'global'  # override region to global for specific orbitNumber queries for MSI_NOM_1B; there are some problems with the bbox for this product
+        start = "2024-07-01T00:00:00Z"
+        end = datetime.now(timezone.utc).strftime("%Y-%m-%dT23:59:00Z")
+        return f"{start}/{end}"
 
-    search = catalog.search(
-        collections=ec_collection,
-        filter = filter,
-        bbox = region_to_bbox(region),
-        datetime = datetime_range,
-        method = 'GET',
-        max_items=max_items  # Adjust as needed, given the large amount of products it is recommended to set a limit if especially if you display results in pandas dataframe or similiar
+    if isinstance(datetime_range, str):
+        return datetime_range
+
+    if isinstance(datetime_range, (list, tuple)) and len(datetime_range) == 2:
+        start, end = datetime_range
+        return f"{_to_iso_utc(start)}/{_to_iso_utc(end)}"
+
+    raise ValueError("datetime_range must be None, a string, or a 2-element list/tuple.")
+
+
+def crop_by_lon_or_lat(ds_ec, lon_or_lat_var, l_min, l_max, sel_across_track_idx=None):
+    ds = ds_ec.sel(across_track=sel_across_track_idx) if sel_across_track_idx is not None else ds_ec
+
+    first = ds[lon_or_lat_var].values[0]
+    last = ds[lon_or_lat_var].values[-1]
+    if not (np.isfinite(first) and np.isfinite(last)):
+        raise ValueError(
+            f"Cannot determine whether {lon_or_lat_var} is ascending or descending due to NaN values at the edges."
+        )
+
+    lonlat_descending = first > last
+    l_start, l_stop = (l_max, l_min) if lonlat_descending else (l_min, l_max)
+
+    values = ds[lon_or_lat_var].values
+    i_start = int(np.nanargmin(np.abs(values - l_start)))
+    i_stop = int(np.nanargmin(np.abs(values - l_stop)))
+
+    print(
+        f"\tCrop by {lon_or_lat_var}: selecting frame from {i_start} "
+        f"({lon_or_lat_var}={values[i_start]:.2f}) to {i_stop} ({lon_or_lat_var}={values[i_stop]:.2f})"
+    )
+    return ds_ec.isel({"along_track": slice(i_start, i_stop)})
+
+
+def crop_to_stcu_region(ds_ec, region, latvar='latitude', lonvar='longitude', sel_across_track_idx=None):
+    lat_min, lat_max = bbox_regions[region]["lat"]
+    lon_min, lon_max = bbox_regions[region]["lon"]
+
+    ds_tmp = crop_by_lon_or_lat(
+        ds_ec=ds_ec,
+        lon_or_lat_var=latvar,
+        l_min=lat_min,
+        l_max=lat_max,
+        sel_across_track_idx=sel_across_track_idx,
+    )
+    return crop_by_lon_or_lat(
+        ds_ec=ds_tmp,
+        lon_or_lat_var=lonvar,
+        l_min=lon_min,
+        l_max=lon_max,
+        sel_across_track_idx=sel_across_track_idx,
     )
 
+
+def _build_search_filter(product, frame=None, orbit_number=None, product_version=default_product_version):
+    filters = [f"productType = '{product}'"]
+    if frame is not None:
+        filters.append(f"frame = '{frame}'")
+    if orbit_number is not None:
+        filters.append(f"orbitNumber = {orbit_number}")
+    if product_version is not None:
+        filters.append(f"productVersion = '{product_version}'")
+    return " and ".join(filters)
+
+
+def _extract_h5_url(item):
+    for enc in ("enclosure_h5", "enclosure_hdr"):
+        asset = getattr(item, "assets", {}).get(enc)
+        href = getattr(asset, "href", None) if asset else None
+        if href and href.lower().endswith(".h5"):
+            return href
+    raise FileNotFoundError("No .h5 file found via enclosure_h5 or enclosure_hdr.")
+
+
+def _extract_orbit(item):
+    title = item.properties.get("title", "")
+    return title[-6:] if len(title) >= 6 else "unknown"
+
+
+def get_ec_data_url_via_maap(
+    datetime_range,
+    product,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    max_items=5,
+):
+    ec_collection = ec_collection or ["EarthCAREL2Validated_MAAP"]
+    datetime_query = _normalize_datetime_range(datetime_range)
+
+    if orbitNumber is not None and product == "MSI_NOM_1B":
+        # Some MSI_NOM_1B bbox queries are unreliable; query globally for orbit-specific requests.
+        region = "global"
+
+    search_kwargs = {
+        "collections": ec_collection,
+        "filter": _build_search_filter(product, frame, orbitNumber, productVersion),
+        "datetime": datetime_query,
+        "method": "GET",
+        "max_items": max_items,
+    }
+    if region is not None:
+        search_kwargs["bbox"] = region_to_bbox(region)
+
+    search = catalog.search(**search_kwargs)
     items = list(search.items())
+
     print(f"Accessing {len(items)} items (limited by max_items).")
     print(f"{search.matched()} items found that matched the query.")
-    if len(items) == 0:
+
+    if not items:
         raise FileNotFoundError("No items found for the given query parameters.")
     if len(items) < search.matched():
-        print("Warning: The number of retrieved items is less than the total matched items. Consider increasing max_items.")
+        print("Warning: Retrieved items are fewer than matched items. Consider increasing max_items.")
 
-    enclosures = ["enclosure_h5", "enclosure_hdr"]
     ds_url_list = []
     for item in items:
-        ds_url = None
-        try:
-            for enc in enclosures:
-                asset = getattr(item, "assets", {}).get(enc)
-                if asset and getattr(asset, "href", None) and asset.href.lower().endswith(".h5"):
-                    ds_url = asset.href
-                    print(f"Found .h5 file in {enc}: {ds_url}")
-                    #break #TODO uncomment if only first found is needed
-        except Exception as e:
-            print(f"Error while searching for .h5 file: {e}")
-            raise FileNotFoundError("No .h5 file found via enclosure_h5 or enclosure_hdr.")
-        print("HDF5 URL:", ds_url)
-        orbit = item.properties['title'][-6:]
-        print("Orbit:", orbit)
+        ds_url = _extract_h5_url(item)
+        orbit = _extract_orbit(item)
+        print(f"Found .h5 URL: {ds_url}")
+        print(f"Orbit: {orbit}")
         ds_url_list.append((ds_url, orbit))
 
     return ds_url_list
 
 
-def get_mcop_via_maap(datetime_range=None, 
-                        region=None, 
-                        frame=None,
-                        orbitNumber=None,
-                        productVersion = 'ba',
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        mcop_variables=['time', 'latitude', 'longitude', 'cloud_water_path', 'cloud_optical_thickness'],
-                        max_items=1,
-                        trim=True
-                        ):
-    """Function to access EarthCARE MSI data via MAAP."""
+def _create_fs(token):
+    return fsspec.filesystem(
+        "https",
+        headers={"Authorization": f"Bearer {token}"},
+        **io_params["fsspec_params"],
+    )
 
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'MSI_COP_2A', region, frame, orbitNumber=orbitNumber, productVersion=productVersion, ec_collection=ec_collection, max_items=max_items)
+
+def _apply_common_ops(
+    ds,
+    ds_url,
+    region=None,
+    trim=False,
+    latvar="latitude",
+    lonvar="longitude",
+    idx_nadir=284,
+    crop_across_track_idx=None,
+):
+    ds.encoding = {"source": ds_url}
+
+    if trim:
+        ds = ecio.trim_to_frame(ds, latvar=latvar, sel_nadir={"across_track": idx_nadir})
+
+    if region is not None:
+        print(
+            f"Cropping to region {region}: "
+            f"lat={bbox_regions[region]['lat']}, lon={bbox_regions[region]['lon']}"
+        )
+        print(
+            f"\tbefore: lat=({ds[latvar].min().values}, {ds[latvar].max().values}), "
+            f"lon=({ds[lonvar].min().values}, {ds[lonvar].max().values})"
+        )
+        ds = crop_to_stcu_region(ds, region, latvar=latvar, lonvar=lonvar, sel_across_track_idx=crop_across_track_idx)
+        print(
+            f"\tafter:  lat=({ds[latvar].min().values}, {ds[latvar].max().values}), "
+            f"lon=({ds[lonvar].min().values}, {ds[lonvar].max().values})"
+        )
+
+    return ds.load()
+
+
+def _preprocess_mrgr(ds, selected_variables):
+    mapping = {
+        "TIR1": "TIR1",
+        "TIR2": "TIR2",
+        "TIR3": "TIR3",
+    }
+    for var_name, band_name in mapping.items():
+        if var_name in selected_variables:
+            ds[var_name] = ds.pixel_values.sel(band=band_name).where(
+                ds.pixel_quality_status.sel(band=band_name) == 0
+            )
+    return ds
+
+
+def _preprocess_mnom(ds, selected_variables):
+    band_index = {"TIR1": 4, "TIR2": 5, "TIR3": 6}
+    for var_name, bidx in band_index.items():
+        if var_name in selected_variables:
+            ds[var_name] = ds.pixel_values.isel(band=bidx).where(
+                ds.pixel_quality_status.isel(band=bidx) == 0
+            )
+
+    for coord_name in ("latitude", "longitude", "land_flag"):
+        if coord_name in selected_variables:
+            ds[coord_name] = ds[coord_name].isel(band=4)
+
+    return ds
+
+
+def _fetch_product_datasets(
+    product,
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbit_number=None,
+    product_version=default_product_version,
+    ec_collection=None,
+    selected_variables=None,
+    max_items=1,
+    trim=False,
+    group="ScienceData",
+    engine="h5netcdf",
+    preprocess=None,
+    crop_across_track_idx=None,
+    latvar="latitude",
+    lonvar="longitude"
+):
+    ds_url_list = get_ec_data_url_via_maap(
+        datetime_range=datetime_range,
+        product=product,
+        region=region,
+        frame=frame,
+        orbitNumber=orbit_number,
+        productVersion=product_version,
+        ec_collection=ec_collection,
+        max_items=max_items,
+    )
 
     print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
+    fs = _create_fs(get_token())
 
-    MCOP_list = []
+    results = []
     for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
+        print(f"Dataset URL: {ds_url}")
+        print(f"Orbit: {orbit}")
+
         with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                #engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as MCOP:
-                # Select only the requested variables
-                MCOP = MCOP[mcop_variables]
-                MCOP.encoding = {'source': ds_url}  # Keep track of source URL
-                if trim:
-                    idx_nadir = 284
-                    MCOP = ecio.trim_to_frame(MCOP, latvar='latitude', sel_nadir={'across_track':idx_nadir})
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {MCOP.latitude.min().values}, {MCOP.latitude.max().values}, lon_min, lon_max = {MCOP.longitude.min().values}, {MCOP.longitude.max().values}")
-                    MCOP = crop_to_stcu_region(MCOP, region, sel_across_track_idx=284)
-                    print(f" \tafter cropping: lat_min, lat_max = {MCOP.latitude.min().values}, {MCOP.latitude.max().values}, lon_min, lon_max = {MCOP.longitude.min().values}, {MCOP.longitude.max().values}")
-                if MCOP is None:
-                    continue
-                MCOP = MCOP.load() # Load data into memory
-        MCOP_list.append((MCOP, orbit))
-    return MCOP_list
+            with xr.open_dataset(
+                f,
+                engine=engine,
+                **io_params["h5py_params"],
+                group=group,
+            ) as ds:
+                if preprocess is not None:
+                    ds = preprocess(ds, selected_variables or [])
+
+                if selected_variables is not None:
+                    ds = ds[selected_variables]
+
+                ds = _apply_common_ops(
+                    ds,
+                    ds_url=ds_url,
+                    region=region,
+                    trim=trim,
+                    latvar=latvar,
+                    lonvar=lonvar,
+                    crop_across_track_idx=crop_across_track_idx,
+                )
+
+        results.append((ds, orbit))
+
+    return results
 
 
-def get_mrgr_via_maap(datetime_range=None, 
-                        region=None,
-                        frame=None,
-                        orbitNumber=None,
-                        ec_collection = ['EarthCAREL1Validated_MAAP'],
-                        mrgr_variables=['time', 'latitude', 'longitude', 'TIR1', 'TIR2', 'TIR3'],
-                        max_items=1,
-                        trim=True
-                        ):
-    """Function to access EarthCARE MSI data via MAAP."""
+def get_mcop_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    mcop_variables=None,
+    max_items=1,
+    trim=True,
+):
+    """Access EarthCARE MSI_COP_2A data via MAAP."""
+    if mcop_variables is None:
+        mcop_variables = [
+            "time",
+            "latitude",
+            "longitude",
+            "cloud_water_path",
+            "cloud_optical_thickness",
+        ]
 
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'MSI_RGR_1C', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
-
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    MRGR_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as MRGR:
-            
-                if 'TIR1' in mrgr_variables:
-                    # For MSI_RGR_1C, pixel_values has an extra band dimension
-                    MRGR['TIR1'] = MRGR.pixel_values.sel(band='TIR1').where(MRGR.pixel_quality_status.sel(band='TIR1') == 0)
-                if 'TIR2' in mrgr_variables:
-                    MRGR['TIR2'] = MRGR.pixel_values.sel(band='TIR2').where(MRGR.pixel_quality_status.sel(band='TIR2') == 0)
-                if 'TIR3' in mrgr_variables:
-                    MRGR['TIR3'] = MRGR.pixel_values.sel(band='TIR3').where(MRGR.pixel_quality_status.sel(band='TIR3') == 0)
-                # Select only the requested variables
-                MRGR = MRGR[mrgr_variables]
-                MRGR.encoding = {'source': ds_url}  # Keep track of source URL
-                if trim:
-                    idx_nadir = 284
-                    MRGR = ecio.trim_to_frame(MRGR, latvar='latitude', sel_nadir={'across_track':idx_nadir})
-                if region is not None:
-                    MRGR = crop_to_stcu_region(MRGR, region, sel_across_track_idx=284)
-                if MRGR is None:
-                    continue
-                MRGR = MRGR.load() # Load data into memory
-        MRGR_list.append((MRGR, orbit))
-    return MRGR_list
-
-    
-def get_mnom_via_maap(datetime_range=None, 
-                        region=None,
-                        frame=None,
-                        orbitNumber=None,
-                        ec_collection = ['EarthCAREL1Validated_MAAP'],
-                        mnom_variables=['time', 'latitude', 'longitude', 'TIR1', 'TIR2', 'TIR3','land_flag'],
-                        max_items=1,
-                        trim=True
-                        ):
-    """Function to access EarthCARE M-NOM data via MAAP."""
-
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'MSI_NOM_1B', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
-
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    MNOM_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as MNOM:
-            
-                if 'TIR1' in mnom_variables:
-                    # For MSI_RGR_1C, pixel_values has an extra band dimension
-                    MNOM['TIR1'] = MNOM.pixel_values.isel(band=4).where(MNOM.pixel_quality_status.isel(band=4) == 0)
-                if 'TIR2' in mnom_variables:
-                    MNOM['TIR2'] = MNOM.pixel_values.isel(band=5).where(MNOM.pixel_quality_status.isel(band=5) == 0)
-                if 'TIR3' in mnom_variables:
-                    MNOM['TIR3'] = MNOM.pixel_values.isel(band=6).where(MNOM.pixel_quality_status.isel(band=6) == 0)
-                if 'latitude' in mnom_variables:
-                    MNOM['latitude'] = MNOM.latitude.isel(band=4)
-                if 'longitude' in mnom_variables:
-                    MNOM['longitude'] = MNOM.longitude.isel(band=4)
-                if 'land_flag' in mnom_variables:
-                    MNOM['land_flag'] = MNOM.land_flag.isel(band=4)
-                ## Select only the requested variables
-                MNOM = MNOM[mnom_variables]
-                MNOM.encoding = {'source': ds_url}  # Keep track of source URL
-                if trim:
-                    idx_nadir = 284
-                    MNOM = ecio.trim_to_frame(MNOM, latvar='latitude', sel_nadir={'across_track':idx_nadir})
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {MNOM.latitude.min().values}, {MNOM.latitude.max().values}, lon_min, lon_max = {MNOM.longitude.min().values}, {MNOM.longitude.max().values}")
-                    MNOM = crop_to_stcu_region(MNOM, region, sel_across_track_idx=284)
-                    print(f" \tafter cropping: lat_min, lat_max = {MNOM.latitude.min().values}, {MNOM.latitude.max().values}, lon_min, lon_max = {MNOM.longitude.min().values}, {MNOM.longitude.max().values}")
-                if MNOM is None:
-                    continue
-                MNOM = MNOM.load() # Load data into memory
-        MNOM_list.append((MNOM, orbit))
-    return MNOM_list
+    return _fetch_product_datasets(
+        product="MSI_COP_2A",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=mcop_variables,
+        max_items=max_items,
+        trim=trim,
+        engine=None,
+        crop_across_track_idx=284,
+    )
 
 
-def get_acmcap_via_maap(datetime_range=None, 
-                        region=None, 
-                        frame=None,
-                        orbitNumber=None,
-                        productVersion = 'ba',
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        acmcap_variables=None,
-                        max_items=1
-                        ):
-    """Function to access EarthCARE MSI data via MAAP."""
+def get_mrgr_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    mrgr_variables=None,
+    max_items=1,
+    trim=True,
+):
+    """Access EarthCARE MSI_RGR_1C data via MAAP."""
+    if mrgr_variables is None:
+        mrgr_variables = ["time", "latitude", "longitude", "TIR1", "TIR2", "TIR3"]
 
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'ACM_CAP_2B', region, frame, orbitNumber=orbitNumber, productVersion=productVersion, ec_collection=ec_collection, max_items=max_items)
-
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    ACMCAP_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as ACMCAP:
-                # Select only the requested variables
-                if acmcap_variables is not None:
-                    ACMCAP = ACMCAP[acmcap_variables]
-                ACMCAP.encoding = {'source': ds_url}  # Keep track of source URL
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {ACMCAP.latitude.min().values:.2f}, {ACMCAP.latitude.max().values:.2f}, lon_min, lon_max = {ACMCAP.longitude.min().values:.2f}, {ACMCAP.longitude.max().values:.2f}")
-                    ACMCAP = crop_to_stcu_region(ACMCAP, region)
-                    print(f" \tafter cropping: lat_min, lat_max = {ACMCAP.latitude.min().values:.2f}, {ACMCAP.latitude.max().values:.2f}, lon_min, lon_max = {ACMCAP.longitude.min().values:.2f}, {ACMCAP.longitude.max().values:.2f}")
-                if ACMCAP is None:
-                    continue
-                ACMCAP = ACMCAP.load() # Load data into memory
-        ACMCAP_list.append((ACMCAP, orbit))
-    return ACMCAP_list
+    return _fetch_product_datasets(
+        product="MSI_RGR_1C",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL1Validated_MAAP"],
+        selected_variables=mrgr_variables,
+        max_items=max_items,
+        trim=trim,
+        preprocess=_preprocess_mrgr,
+        crop_across_track_idx=284,
+    )
 
 
-def get_aebd_via_maap(datetime_range=None, 
-                        region=None,
-                        frame=None,
-                        orbitNumber=None,
-                        productVersion = 'ba',
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        aebd_variables=None,
-                        max_items=1
-                        ):
-    """Function to access EarthCARE A-EBD data via MAAP."""
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'ATL_EBD_2A', region, frame, orbitNumber=orbitNumber, productVersion=productVersion, ec_collection=ec_collection, max_items=max_items)
+def get_mnom_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    mnom_variables=None,
+    max_items=1,
+    trim=True,
+):
+    """Access EarthCARE MSI_NOM_1B data via MAAP."""
+    if mnom_variables is None:
+        mnom_variables = ["time", "latitude", "longitude", "TIR1", "TIR2", "TIR3", "land_flag"]
 
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    AEBD_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as AEBD:
-                # Select only the requested variables
-                if aebd_variables is not None:
-                    AEBD = AEBD[aebd_variables]
-                AEBD.encoding = {'source': ds_url}  # Keep track of source URL
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {AEBD.latitude.min().values:.2f}, {AEBD.latitude.max().values:.2f}, lon_min, lon_max = {AEBD.longitude.min().values:.2f}, {AEBD.longitude.max().values:.2f}")
-                    AEBD = crop_to_stcu_region(AEBD, region)
-                    print(f" \tafter cropping: lat_min, lat_max = {AEBD.latitude.min().values:.2f}, {AEBD.latitude.max().values:.2f}, lon_min, lon_max = {AEBD.longitude.min().values:.2f}, {AEBD.longitude.max().values:.2f}")
-                if AEBD is None:
-                    continue
-                AEBD = AEBD.load() # Load data into memory
-        AEBD_list.append((AEBD, orbit))
-    return AEBD_list
+    return _fetch_product_datasets(
+        product="MSI_NOM_1B",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL1Validated_MAAP"],
+        selected_variables=mnom_variables,
+        max_items=max_items,
+        trim=trim,
+        preprocess=_preprocess_mnom,
+        crop_across_track_idx=284,
+    )
 
 
-def get_actc_via_maap(datetime_range=None, 
-                        region=None,
-                        frame=None,
-                        orbitNumber=None,
-                        productVersion = 'ba',
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        actc_variables=None,
-                        max_items=1
-                        ):
-    """Function to access EarthCARE A-TC data via MAAP."""
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'AC__TC__2B', region, frame, orbitNumber=orbitNumber, productVersion=productVersion, ec_collection=ec_collection, max_items=max_items)
-
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    ACTC_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as ACTC:
-                # Select only the requested variables
-                if actc_variables is not None:
-                    ACTC = ACTC[actc_variables]
-                ACTC.encoding = {'source': ds_url}  # Keep track of source URL
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {ACTC.latitude.min().values:.2f}, {ACTC.latitude.max().values:.2f}, lon_min, lon_max = {ACTC.longitude.min().values:.2f}, {ACTC.longitude.max().values:.2f}")
-                    ACTC = crop_to_stcu_region(ACTC, region)
-                    print(f" \tafter cropping: lat_min, lat_max = {ACTC.latitude.min().values:.2f}, {ACTC.latitude.max().values:.2f}, lon_min, lon_max = {ACTC.longitude.min().values:.2f}, {ACTC.longitude.max().values:.2f}")
-                if ACTC is None:
-                    continue
-                ACTC = ACTC.load() # Load data into memory
-        ACTC_list.append((ACTC, orbit))
-    return ACTC_list
+def get_acmcap_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    acmcap_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE ACM_CAP_2B data via MAAP."""
+    return _fetch_product_datasets(
+        product="ACM_CAP_2B",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=acmcap_variables,
+        max_items=max_items,
+    )
 
 
-def get_cfmr_via_maap(datetime_range=None, 
-                        region=None, 
-                        frame=None,
-                        orbitNumber=None,
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        cfmr_variables=None,
-                        max_items=1
-                        ):
-    """Function to access EarthCARE C-FMR data via MAAP."""
-
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'CPR_FMR_2A', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
-
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    CFMR_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as CFMR:
-                # Select only the requested variables
-                if cfmr_variables is not None:
-                    CFMR = CFMR[cfmr_variables]
-                CFMR.encoding = {'source': ds_url}  # Keep track of source URL
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {CFMR.latitude.min().values:.2f}, {CFMR.latitude.max().values:.2f}, lon_min, lon_max = {CFMR.longitude.min().values:.2f}, {CFMR.longitude.max().values:.2f}")
-                    CFMR = crop_to_stcu_region(CFMR, region)
-                    print(f" \tafter cropping: lat_min, lat_max = {CFMR.latitude.min().values:.2f}, {CFMR.latitude.max().values:.2f}, lon_min, lon_max = {CFMR.longitude.min().values:.2f}, {CFMR.longitude.max().values:.2f}")
-                if CFMR is None:
-                    continue
-                CFMR = CFMR.load() # Load data into memory
-        CFMR_list.append((CFMR, orbit))
-    return CFMR_list
+def get_aebd_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    aebd_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE ATL_EBD_2A data via MAAP."""
+    return _fetch_product_datasets(
+        product="ATL_EBD_2A",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=aebd_variables,
+        max_items=max_items,
+    )
 
 
-def get_ccd_via_maap(datetime_range=None, 
-                        region=None, 
-                        frame=None,
-                        orbitNumber=None,
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        ccd_variables=None,
-                        max_items=1
-                        ):
-    """Function to access EarthCARE C-CD data via MAAP."""
-
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'CPR_CD__2A', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
-
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
-
-    CCD_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData") as CCD:
-                # Select only the requested variables
-                if ccd_variables is not None:
-                    CCD = CCD[ccd_variables]
-                CCD.encoding = {'source': ds_url}  # Keep track of source URL
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {CCD.latitude.min().values:.2f}, {CCD.latitude.max().values:.2f}, lon_min, lon_max = {CCD.longitude.min().values:.2f}, {CCD.longitude.max().values:.2f}")
-                    CCD = crop_to_stcu_region(CCD, region)
-                    print(f" \tafter cropping: lat_min, lat_max = {CCD.latitude.min().values:.2f}, {CCD.latitude.max().values:.2f}, lon_min, lon_max = {CCD.longitude.min().values:.2f}, {CCD.longitude.max().values:.2f}")
-                if CCD is None:
-                    continue
-                CCD = CCD.load() # Load data into memory
-        CCD_list.append((CCD, orbit))
-    return CCD_list
+def get_actc_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    actc_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE AC__TC__2B data via MAAP."""
+    return _fetch_product_datasets(
+        product="AC__TC__2B",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=actc_variables,
+        max_items=max_items,
+    )
 
 
-def get_bmaflx_via_maap(datetime_range=None, 
-                        region=None, 
-                        frame=None,
-                        orbitNumber=None,
-                        ec_collection = ['EarthCAREL2Validated_MAAP'],
-                        bmaflx_variables=None,
-                        max_items=1
-                        ):
-    """Function to access EarthCARE BMA_FLX data via MAAP."""
+def get_cfmr_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    cfmr_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE CPR_FMR_2A data via MAAP."""
+    return _fetch_product_datasets(
+        product="CPR_FMR_2A",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=cfmr_variables,
+        max_items=max_items,
+    )
 
-    ds_url_list = get_ec_data_url_via_maap(datetime_range, 'BMA_FLX_2B', region, frame, orbitNumber=orbitNumber, ec_collection=ec_collection, max_items=max_items)
 
-    print("Fetching ESA MAAP token...")
-    ESA_TOKEN = get_token()
-    fs = fsspec.filesystem(
-        "https",
-        headers={"Authorization": f"Bearer {ESA_TOKEN}"},
-        **io_params["fsspec_params"]  )
+def get_ccd_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    ccd_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE CPR_CD__2A data via MAAP."""
+    return _fetch_product_datasets(
+        product="CPR_CD__2A",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=ccd_variables,
+        max_items=max_items,
+    )
 
-    BMAFLX_list = []
-    for ds_url, orbit in ds_url_list:
-        print("Dataset URL:", ds_url)
-        print("Orbit:", orbit)
-        # Open the file and read it into an xarray Dataset
-        with fs.open(ds_url, "rb") as f:
-            with xr.open_dataset(f,
-                                engine="h5netcdf",
-                                **io_params["h5py_params"],
-                                group="ScienceData/AssessmentResolution") as BMAFLX: # StandardResolution ?
-                # Select only the requested variables
-                if bmaflx_variables is not None:
-                    BMAFLX = BMAFLX[bmaflx_variables]
-                BMAFLX.encoding = {'source': ds_url}  # Keep track of source URL
-                if region is not None:
-                    print(f"Cropping to region {region}... lat_min, lat_max = {bbox_regions[region]['lat']}, lon_min, lon_max = {bbox_regions[region]['lon']}")
-                    print(f"\tbefore cropping: lat_min, lat_max = {BMAFLX.latitude.min().values:.2f}, {BMAFLX.latitude.max().values:.2f}, lon_min, lon_max = {BMAFLX.longitude.min().values:.2f}, {BMAFLX.longitude.max().values:.2f}")
-                    BMAFLX = crop_to_stcu_region(BMAFLX, region)
-                    print(f" \tafter cropping: lat_min, lat_max = {BMAFLX.latitude.min().values:.2f}, {BMAFLX.latitude.max().values:.2f}, lon_min, lon_max = {BMAFLX.longitude.min().values:.2f}, {BMAFLX.longitude.max().values:.2f}")
-                if BMAFLX is None:
-                    continue
-                BMAFLX = BMAFLX.load() # Load data into memory
-        BMAFLX_list.append((BMAFLX, orbit))
-    return BMAFLX_list
+
+def get_bmaflx_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    bmaflx_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE BMA_FLX_2B data via MAAP."""
+    return _fetch_product_datasets(
+        product="BMA_FLX_2B",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=bmaflx_variables,
+        max_items=max_items,
+        group="ScienceData/AssessmentResolution",
+    )
+
+
+def get_acmrt_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    acmrt_variables=None,
+    latvar="latitude_active",
+    lonvar="longitude_active",
+    max_items=1,
+):
+    """Access EarthCARE ACM_RT__2B data via MAAP."""
+    return _fetch_product_datasets(
+        product="ACM_RT__2B",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=acmrt_variables,
+        latvar=latvar,
+        lonvar=lonvar,
+        max_items=max_items
+    )
+
+
+def get_auxmet_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    auxmet_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE AUX_MET_1D data via MAAP."""
+    return _fetch_product_datasets(
+        product="AUX_MET_1D",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREXMETL1DProducts10_MAAP"],
+        selected_variables=auxmet_variables,
+        max_items=max_items,
+    )

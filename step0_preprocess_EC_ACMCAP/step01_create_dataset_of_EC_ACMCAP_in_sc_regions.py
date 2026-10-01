@@ -88,11 +88,17 @@ def compute_ER(ds):
     ER.name = 'liquid_effective_radius'
     return ER
 
-def compute_ER_passive_perspective(ds):
+def compute_ER_passive_perspective(ds, profile_assumption='adiabatic'):
     density_liquid = 1000 # kg/m3
     LWP = compute_lwp(ds) # kg/m2
-    ER = (3/2) * LWP / (density_liquid * ds.liquid_optical_depth)
-    ER.attrs['long_name'] = 'Liquid effective radius computed as (3/2) * LWP / (density_liquid * optical_depth)'
+    if profile_assumption == 'adiabatic':
+        f = 3/2
+        f_text = '3/2'
+    elif profile_assumption == 'homogeneous':
+        f = 9/5
+        f_text = '9/5'
+    ER = f * LWP / (density_liquid * ds.liquid_optical_depth)
+    ER.attrs['long_name'] = f'Liquid effective radius computed as ({f_text}) * LWP / (density_liquid * optical_depth)'
     ER.attrs['units'] = 'm'
     ER.attrs['plot_range'] = np.array([0.,0.0002])
     ER.attrs['plot_scale'] = 'linear'

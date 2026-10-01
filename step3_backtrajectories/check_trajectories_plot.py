@@ -14,15 +14,22 @@ import sys
 sys.path.append('/home/jmayer/ACI_research/Code/mesoscale_structure/step2_judge_for_goes')
 from functions_for_goes import crop_goes_to_latlon_box, convert_radiance_to_brightness_temp
 
+day_or_night = 'night'
+
 # SEP region (Southeast Pacific)
 lat_bounds = (-22.5, -2.5)
 lon_bounds = (-95, -75)
+overpass_times = {'day': '18', 
+                  'night': '08'} # TODO depends on the overpass; sometimes also 06!!
+co_transition_filenames = {'day': '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/CO_transitions_EC_GOES.nc', # '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_partial.nc'
+                           'night': '/home/jmayer/ACI_research/Code/mesoscale_structure/mesoscale_structure_day_vs_night/CO_transitions_EC_GOES_night.nc'}
 
-with xr.open_dataset('/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_partial.nc') as ds:
+with xr.open_dataset(co_transition_filenames[day_or_night]) as ds:
     bt_with_goes = ds.load()
 
 orbits_with_co_transitions = [
-    '01413E', '05770E', '07357E'
+    '01562A'
+    #'01413E', '05770E', '07357E'
     #'01009E', '01040E', '01056E', '01071E', '01087E', '01102E',
     #'01133E', '01164E', '01180E', '01211E', '01227E', '01242E',
     #'01258E', '01273E', '01289E', '01304E', '01320E', '01351E',
@@ -70,8 +77,7 @@ for orbit in orbits_with_co_transitions:
         goes_times = ['00', '02', '04', '06', '08', '10', '12', '14', '16', '18', '20', '22']
     else:
         goes_times = ['14', '16', '18', '20', '22']
-    overpass_time = '18'
-    #overpass_time = str(bt_orbit.time_startpoint[0].dt.strftime('%H%M').values)
+    overpass_time = overpass_times[day_or_night]
     for date in dates:
         if date < '20250407':
             goes_id = '16'
@@ -100,7 +106,7 @@ for orbit in orbits_with_co_transitions:
 
             if include_IR_obs:
                 fig, axs = plt.subplots(1, 2, figsize=(20, 7))
-                plt.suptitle(f'{date} {goes_time} UTC, GOES-19')
+                plt.suptitle(f'{date} {goes_time} UTC, GOES-{goes_id}')
 
                 # Store the return value from pcolormesh
                 img1 = axs[0].pcolormesh(ds_COD_cropped.longitude, ds_COD_cropped.latitude, ds_COD_cropped['COD'], 
