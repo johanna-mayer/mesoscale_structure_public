@@ -22,7 +22,7 @@ catalog = Client.open(catalog_url)
 
 # Path to credentials file
 CREDENTIALS_FILE = Path(
-    "/home/jmayer/ACI_research/Code/mesoscale_structure/step1_judge_for_msi/credentials_maap.txt"
+    "/home/jmayer/ACI_research/Code/mesoscale_structure/credentials_maap.txt"
 )
 
 io_params = {
@@ -628,6 +628,29 @@ def get_ccd_via_maap(
         product_version=productVersion,
         ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
         selected_variables=ccd_variables,
+        max_items=max_items,
+    )
+
+def get_ccld_via_maap(
+    datetime_range=None,
+    region=None,
+    frame=None,
+    orbitNumber=None,
+    productVersion=default_product_version,
+    ec_collection=None,
+    ccld_variables=None,
+    max_items=1,
+):
+    """Access EarthCARE CPR_CLD_2A data via MAAP."""
+    return _fetch_product_datasets(
+        product="CPR_CLD_2A",
+        datetime_range=datetime_range,
+        region=region,
+        frame=frame,
+        orbit_number=orbitNumber,
+        product_version=productVersion,
+        ec_collection=ec_collection or ["EarthCAREL2Validated_MAAP"],
+        selected_variables=ccld_variables,
         max_items=max_items,
     )
 

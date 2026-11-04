@@ -19,16 +19,15 @@ day_or_night = 'night'
 # SEP region (Southeast Pacific)
 lat_bounds = (-22.5, -2.5)
 lon_bounds = (-95, -75)
-overpass_times = {'day': '18', 
-                  'night': '08'} # TODO depends on the overpass; sometimes also 06!!
+#overpass_times = {'day': '18', 
+#                  'night': '08'} # TODO depends on the overpass; sometimes also 06!!
 co_transition_filenames = {'day': '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/CO_transitions_EC_GOES.nc', # '/home/jmayer/ACI_research/Code/resources_mesoscale_structure/bt_with_goes_partial.nc'
-                           'night': '/home/jmayer/ACI_research/Code/mesoscale_structure/mesoscale_structure_day_vs_night/CO_transitions_EC_GOES_night.nc'}
+                           'night': '/home/jmayer/ACI_research/Code/mesoscale_structure_day_vs_night/CO_transitions_EC_GOES_night.nc'}
 
 with xr.open_dataset(co_transition_filenames[day_or_night]) as ds:
     bt_with_goes = ds.load()
 
-orbits_with_co_transitions = [
-    '01562A'
+orbits_with_co_transitions_day = [
     #'01413E', '05770E', '07357E'
     #'01009E', '01040E', '01056E', '01071E', '01087E', '01102E',
     #'01133E', '01164E', '01180E', '01211E', '01227E', '01242E',
@@ -59,6 +58,37 @@ orbits_with_co_transitions = [
     #'08073E', '08120E', '08151E', '08291E', '08353E'
     ]
 
+orbits_with_co_transitions_night = [
+       '01033A', '01064A', '01095A', '01126A', '01142A', '01173A',
+       '01204A', '01235A', '01266A', '01297A', '01313A', '01391A',
+       '01531A', '01546A', '01562A', '01593A', '01655A', '01671A',
+       '01702A', '01733A', '01764A', '01780A', '01795A', '01842A',
+       '01935A', '02044A', '02091A', '02184A', '02231A', '02262A',
+       '02402A', '02418A', '02433A', '02449A', '02464A', '02480A',
+       '02558A', '02651A', '02682A', '02729A', '02900A', '03071A',
+       '04565A', '04627A', '04658A', '04814A', '04845A', '04876A',
+       '05016A', '05047A', '05125A', '05296A', '05343A', '05436A',
+       '05452A', '05514A', '05545A', '05561A', '05576A', '05623A',
+       '05685A', '05701A', '05763A', '05841A', '05965A', '05981A',
+       '06012A', '06043A', '06074A', '06152A', '06183A', '06199A',
+       '06230A', '06292A', '06323A', '06339A', '06354A', '06370A',
+       '06401A', '06432A', '06448A', '06463A', '06479A', '06494A',
+       '06510A', '06541A', '06572A', '06588A', '06619A', '06650A',
+       '06712A', '06728A', '06743A', '06759A', '06790A', '06821A',
+       '06837A', '06852A', '06868A', '06883A', '06899A', '06930A',
+       '06961A', '07008A', '07039A', '07070A', '07101A', '07117A',
+       '07148A', '07179A', '07288A', '07319A', '07350A', '07381A',
+       '07397A', '07428A', '07459A', '07490A', '07506A', '07537A',
+       '07568A', '07615A', '07630A', '07646A', '07677A', '07755A',
+       '07786A', '07817A'
+       ]
+
+if day_or_night == 'day':
+    orbits_with_co_transitions = orbits_with_co_transitions_day
+else:
+    orbits_with_co_transitions = orbits_with_co_transitions_night
+
+
 include_IR_obs = True
 palette_goes_cats = {0: 'black', 1: 'blue', 2: 'orange', 3: 'black', 4: 'black', 5: 'black', np.nan: 'grey', -1: 'grey'}
 
@@ -72,12 +102,16 @@ for orbit in orbits_with_co_transitions:
     dates1 = np.unique(bt_orbit.datetime_traj[-1].dt.strftime('%Y%m%d').dropna('timestep'))
     dates = np.unique(np.concatenate((dates0, dates1)))
 
+    # EC overpass time (i.e. time from which trajectories were started; usually 18:00 for daytime and 06 or 08 for nighttime)
+    #overpass_time = overpass_times[day_or_night]
+    middle_index = len(bt_orbit.time_startpoint)//2
+    overpass_time =str(bt_orbit.isel(time_startpoint=middle_index).datetime_traj.sel(timestep=0).dt.strftime('%H').values)
+
 
     if include_IR_obs:
         goes_times = ['00', '02', '04', '06', '08', '10', '12', '14', '16', '18', '20', '22']
     else:
         goes_times = ['14', '16', '18', '20', '22']
-    overpass_time = overpass_times[day_or_night]
     for date in dates:
         if date < '20250407':
             goes_id = '16'
@@ -106,7 +140,7 @@ for orbit in orbits_with_co_transitions:
 
             if include_IR_obs:
                 fig, axs = plt.subplots(1, 2, figsize=(20, 7))
-                plt.suptitle(f'{date} {goes_time} UTC, GOES-{goes_id}')
+                plt.suptitle(f'{date} {goes_time} UTC, GOES-{goes_id}, EC orbit {orbit}')
 
                 # Store the return value from pcolormesh
                 img1 = axs[0].pcolormesh(ds_COD_cropped.longitude, ds_COD_cropped.latitude, ds_COD_cropped['COD'], 
