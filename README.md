@@ -1,6 +1,6 @@
 # Mesoscale Structure
 
-This repository contains the code used to build and analyze datasets for a research study on stratocumulus mesoscale organization, with a focus on closed and open cell structures and their transitions.
+This repository contains the code used to build and analyze datasets for a research study on stratocumulus mesoscale organization, with a focus on closed and open cell structures and their transitions. Please refer to the publication for details on the study: https://doi.org/10.5194/acp-26-14085-2026.
 
 The workflow is split into five main stages:
 
@@ -69,11 +69,11 @@ Input and intermediate datasets are produced and consumed across the stage folde
 
 ## How To Cite This Code
 
-If you use this codebase in a publication, please cite the associated research paper/preprint (??).
+If you use this codebase in a publication, please cite the associated research paper:
 
-Suggested minimum information:
+J. Mayer et al., 2026. EarthCARE reveals details on the role of rain in closed-to-open cell transitions. Atmospheric Chemistry and Physics. doi: 10.5194/acp-26-14085-2026
 
-- Authors: Johanna Mayer
-- Year: 2026
-- ??
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
  
